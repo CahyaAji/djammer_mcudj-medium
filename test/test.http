@@ -1,5 +1,5 @@
 #### Coba
-GET http://192.168.10.10/led
+GET http://192.168.10.11/led
 Content-Type: application/json
 
 {
@@ -16,7 +16,7 @@ Content-Type: application/json
 }
 
 #### Test Jammer On
-POST http://192.168.10.10/jammer
+POST http://192.168.10.11/jammer
 Content-Type: application/json
 
 {
@@ -38,9 +38,9 @@ Content-Type: application/json
 
 {
     "is_on": true,
-    "r": 200,
-    "g": 20,
-    "b": 20
+    "r": 20,
+    "g": 200,
+    "b": 200
 }
 
 #### Set RGB animation
