@@ -1,0 +1,476 @@
+#include <Arduino.h>
+#include <SPI.h>
+#include <Ethernet.h>
+#include <ArduinoJson.h>
+#include <IWatchdog.h>
+#include <ArduinoOTA.h>
+#include <Adafruit_NeoPixel.h>
+
+
+// W5500 Hardware Pins
+#define W5500_SCK   PB3
+#define W5500_MISO  PB4
+#define W5500_MOSI  PB5
+#define W5500_CS    PA15
+#define W5500_RST   PB8
+
+// JAMM Pin
+#define JAMM_1500_PIN  PA5
+#define JAMM_900_PIN   PA3
+#define JAMM_2400_PIN  PA2
+#define JAMM_5200_PIN  PA1
+#define JAMM_5800_PIN  PA0
+
+// FAN Pin
+#define FAN_PIN    PA4
+#define SSR_SPARE  PA6
+
+// STATE Pin
+#define LED_BOARD PC13
+#define LED1_PIN  PB14
+#define LED2_PIN  PB15
+#define LED_RGB_PIN PA7
+#define LED_RGB_NUM_PIXELS 7
+// #define BUZZER_PIN  PA8
+
+struct TimedPulse {
+  uint8_t pin;
+  unsigned long endTime;
+  bool active;
+};
+
+TimedPulse led1Pulse = { LED1_PIN, 0, false };
+
+void checkPulse(TimedPulse &p) {
+  if (p.active && millis() >= p.endTime) {
+    digitalWrite(p.pin, LOW);
+    p.active = false;
+  }
+}
+
+// NeoPixel configuration
+// Parameter 1 = Number of pixels in strip
+// Parameter 2 = Arduino pin number (most are valid)
+// Parameter 3 = Pixel type flags, add together as needed (NEO_GRB is standard for WS2812)
+// notifRGB
+Adafruit_NeoPixel notifRGB(LED_RGB_NUM_PIXELS, LED_RGB_PIN, NEO_GRB + NEO_KHZ800);
+
+// Animation state variables
+bool animationRunning = false;
+bool manualOverride = false;
+unsigned long lastAnimationUpdate = 0;
+const unsigned long animationInterval = 20; // 50 FPS
+// notifRGB
+uint16_t notifRotationOffset = 0;  // Current hue rotation offset (0-65535)
+
+// notifRGB
+void updateNotifAnimation() {
+  unsigned long now = millis();
+  if (now - lastAnimationUpdate < animationInterval) return;
+  lastAnimationUpdate = now;
+
+  if (!animationRunning) return;
+
+  // Advance the rotation offset for smooth spinning effect
+  notifRotationOffset += 512;
+
+  // Set each pixel to a hue based on its position + rotation offset
+  for (int i = 0; i < LED_RGB_NUM_PIXELS; i++) {
+    uint16_t hue = (uint16_t)((uint32_t)i * 65536 / LED_RGB_NUM_PIXELS) + notifRotationOffset;
+    notifRGB.setPixelColor(i, notifRGB.ColorHSV(hue, 255, 255));
+  }
+
+  notifRGB.show();
+}
+
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x51 };
+IPAddress ip(192, 168, 10, 11);
+IPAddress gateway(192, 168, 10, 1);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress myDns(192, 168, 10, 1);
+
+EthernetServer server(80);
+
+void sendJSONResponse(EthernetClient& client, int statusCode, const String& jsonMessage) {
+  client.print("HTTP/1.1 ");
+  client.print(statusCode);
+  client.println(" OK\r\nContent-Type: application/json\r\nConnection: close\r\n");
+  client.println(jsonMessage);
+}
+
+// --- Route: GET /led (Read current state) ---
+void handleGetLedRoute(EthernetClient& client) {
+  bool currentState = digitalRead(LED_BOARD);
+  // Note: On many STM32 boards like Black Pill, PC13 is active-LOW. 
+  // If your LED turns on when pin is HIGH, keep this as-is.
+  String response = "{\"status\":\"success\",\"led_on\":" + String(currentState ? "true" : "false") + "}";
+  sendJSONResponse(client, 200, response);
+}
+
+// --- Route: POST /led1/pulse (Turn on LED1 for 3 seconds) ---
+void handlePostLed1PulseRoute(EthernetClient& client) {
+  digitalWrite(led1Pulse.pin, HIGH); 
+  led1Pulse.endTime = millis() + 3000;
+  led1Pulse.active = true;
+  sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"LED1 pulse started for 3 seconds\"}");
+}
+
+void handleNotifRGBControl(EthernetClient& client) {
+  JsonDocument doc; 
+  DeserializationError error = deserializeJson(doc, client);
+
+  if (error) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
+    return;
+  }
+
+  if (!doc["is_on"].is<bool>() || !doc["r"].is<int>() || !doc["g"].is<int>() || !doc["b"].is<int>()) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys (is_on, r, g, b required)\"}");
+    return;
+  }
+
+    Serial.println("Received /notifRGB request");
+
+    bool isOn = doc["is_on"];
+    int r = doc["r"];
+    int g = doc["g"];
+    int b = doc["b"];
+
+    // Boundary check for RGB ranges
+    if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
+        sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"RGB values must be 0-255\"}");
+        return;
+    }
+
+    if(isOn == false) {
+      notifRGB.clear();
+    } else {
+      for(int i=0; i<LED_RGB_NUM_PIXELS; i++) {
+        notifRGB.setPixelColor(i, notifRGB.Color(r, g, b));
+      }
+    }
+
+    notifRGB.show();
+
+    JsonDocument responseDoc;
+    responseDoc["success"] = true;
+    responseDoc["is_on"] = isOn ? "ON" : "OFF";
+    responseDoc["color"] = String(r) + "," + String(g) + "," + String(b);
+
+    String jsonResponse;
+    serializeJson(responseDoc, jsonResponse);
+    sendJSONResponse(client, 200, jsonResponse);
+
+}
+
+// notifRGB
+void handleAnimateRGBControl(EthernetClient& client) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, client);
+
+  if (error) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
+    return;
+  }
+
+  if (!doc["is_on"].is<bool>()) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid key: is_on (boolean required)\"}");
+    return;
+  }
+
+    Serial.println("Received /animateRGB request");
+
+    bool isOn = doc["is_on"];
+
+    if(isOn == false) {
+      animationRunning = false;
+      notifRGB.clear();
+      notifRGB.show();
+    } else {
+      animationRunning = true;
+    }
+
+    JsonDocument responseDoc;
+    responseDoc["success"] = true;
+    responseDoc["is_on"] = isOn ? "ON" : "OFF";
+    responseDoc["message"] = isOn ? "Animation started" : "Animation stopped";
+
+    String jsonResponse;
+    serializeJson(responseDoc, jsonResponse);
+    sendJSONResponse(client, 200, jsonResponse);
+}
+
+void handlePostFanRoute(EthernetClient& client) {
+  JsonDocument doc; 
+  DeserializationError error = deserializeJson(doc, client);
+
+  if (error) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
+    return;
+  }
+
+  // Validate that required keys
+  if (!doc["is_on"].is<bool>()) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid key: fan (boolean required)\"}");
+    return;
+  }
+
+  Serial.print("[HTTP] Received Fan Control Command");
+
+  bool isOn = doc["is_on"];
+  digitalWrite(FAN_PIN, isOn);
+  sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Fan state updated\"}");
+
+}
+
+void handlePostJammerRoute(EthernetClient& client) {
+  JsonDocument doc; 
+  DeserializationError error = deserializeJson(doc, client);
+
+  if (error) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
+    return;
+  }
+
+  // Validate that required keys
+  if (!doc["jamm_freq"].is<int>() || !doc["is_on"].is<bool>()) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing a key\"}");
+    return;
+  }
+
+  Serial.print("[HTTP] Received Jammer Command");
+
+  // Process the jammer command
+  int jammerFreq = doc["jamm_freq"];
+  bool isOn = doc["is_on"];
+
+  switch (jammerFreq) {
+    case 900:
+        digitalWrite(JAMM_900_PIN, isOn);
+        break;
+    case 1500:
+        digitalWrite(JAMM_1500_PIN, isOn);
+        break;
+    case 2400:
+        digitalWrite(JAMM_2400_PIN, isOn);
+        break;
+    case 5200:
+        digitalWrite(JAMM_5200_PIN, isOn);
+        break;
+    case 5800:
+        digitalWrite(JAMM_5800_PIN, isOn);
+        break;
+    default:
+        sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid 'jamm' frequency\"}");
+        return;
+    }
+
+    Serial.print("[HTTP] Jammer frequency ");
+    Serial.print(jammerFreq);
+    Serial.print(" is now ");
+    Serial.println(isOn ? "ON" : "OFF");
+    String response = "{\"success\": true,\"message\":\"Jammer frequency " + String(jammerFreq) + " is now " + (isOn ? "ON" : "OFF") + "\"}";
+    sendJSONResponse(client, 200, response);
+}
+
+// --- Route: POST /ota ---
+void handleOtaRoute(EthernetClient& client, long expectedSize) {
+  if (expectedSize <= 0 || expectedSize > 256000) {
+    sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Invalid size constraints\"}");
+    return;
+  }
+
+  Serial.print("[OTA] Initializing landing partition allocation for: ");
+  Serial.print(expectedSize);
+  Serial.println(" bytes.");
+
+  if (InternalStorage.open(expectedSize)) {
+    uint8_t buffer[512];
+    long totalReceived = 0;
+
+    while (client.connected() || client.available()) {
+      IWatchdog.reload();
+      if (client.available()) {
+        int len = client.read(buffer, sizeof(buffer));
+        if (len > 0) {
+          for (int j = 0; j < len; j++) {
+            InternalStorage.write(buffer[j]);
+            totalReceived++;
+          }
+        }
+      }
+      if (totalReceived >= expectedSize) {
+        break;
+      }
+    }
+    InternalStorage.close();
+
+    Serial.print("[OTA] Extraction finished. Received count: ");
+    Serial.println(totalReceived);
+
+    if (totalReceived == expectedSize) {
+      Serial.println("[OTA] Verification Success! Performing system remap...");
+      sendJSONResponse(client, 200, "{\"status\":\"success\",\"message\":\"Flashing complete. Rebooting.\"}");
+      client.stop();
+      delay(500);
+      InternalStorage.apply(); 
+    } else {
+      Serial.println("[OTA] Critical Fail: Packet sizes do not match header metadata.");
+    }
+  }
+  
+  client.stop();
+  NVIC_SystemReset();
+}
+
+void setup() {
+  Serial.begin(115200);
+  IWatchdog.begin(20000000); 
+
+  pinMode(LED_BOARD, OUTPUT);
+
+  pinMode(JAMM_1500_PIN, OUTPUT);
+  pinMode(JAMM_900_PIN, OUTPUT);
+  pinMode(JAMM_2400_PIN, OUTPUT);
+  pinMode(JAMM_5200_PIN, OUTPUT);
+  pinMode(JAMM_5800_PIN, OUTPUT);
+
+  pinMode(FAN_PIN, OUTPUT);
+  pinMode(SSR_SPARE, OUTPUT);
+
+  pinMode(LED1_PIN, OUTPUT);
+  pinMode(LED2_PIN, OUTPUT);
+  // pinMode(LED_PWM_PIN, OUTPUT);
+  // pinMode(BUZZER_PIN, OUTPUT);
+
+  digitalWrite(JAMM_1500_PIN, LOW);
+  digitalWrite(JAMM_900_PIN, LOW);
+  digitalWrite(JAMM_2400_PIN, LOW);
+  digitalWrite(JAMM_5200_PIN, LOW);
+  digitalWrite(JAMM_5800_PIN, LOW);
+  digitalWrite(FAN_PIN, LOW);
+  digitalWrite(SSR_SPARE, LOW);
+  digitalWrite(LED1_PIN, LOW);
+  digitalWrite(LED2_PIN, LOW);
+  // digitalWrite(LED1_PIN, HIGH);
+  // digitalWrite(LED2_PIN, HIGH);
+
+  notifRGB.begin();
+  notifRGB.show(); // Initialize all pixels to 'off'
+
+  // Hard Reset W5500
+  pinMode(W5500_RST, OUTPUT);
+  digitalWrite(W5500_RST, LOW);
+  delay(100);
+  digitalWrite(W5500_RST, HIGH);
+  delay(300);
+  
+  SPI.setMOSI(W5500_MOSI);
+  SPI.setMISO(W5500_MISO);
+  SPI.setSCLK(W5500_SCK);
+  SPI.begin();
+
+  Ethernet.init(W5500_CS);
+  Ethernet.begin(mac, ip, myDns, gateway, subnet);
+  server.begin();
+
+  Serial.print("[NET] Wired Server actively listening on: http://");
+  Serial.println(Ethernet.localIP());
+}
+
+void loop() {
+  IWatchdog.reload();
+
+  checkPulse(led1Pulse);
+
+  // notifRGB
+  updateNotifAnimation();
+
+  EthernetClient client = server.available();
+  if (client) {
+    String currentLine = "";
+    String method = "";  // Added variable to catch GET/POST
+    String route = "";
+    long contentLength = 0;
+    unsigned long timeoutStart = millis();
+
+    while (client.connected()) {
+      IWatchdog.reload(); 
+      if (millis() - timeoutStart > 3000) {
+        break;
+      }
+
+      if (client.available()) {
+        char c = client.read();
+        
+        if (c == '\n') {
+          if (currentLine.length() == 0) {
+            break; 
+          }
+
+          // --- EXTRACT METHOD AND ROUTE ---
+          // Example first line: "POST /led HTTP/1.1"
+          if (currentLine.startsWith("POST ") || currentLine.startsWith("GET ")) {
+            int firstSpace = currentLine.indexOf(' ');
+            int secondSpace = currentLine.indexOf(' ', firstSpace + 1);
+            
+            method = currentLine.substring(0, firstSpace);
+            route = currentLine.substring(firstSpace + 1, secondSpace);
+
+            Serial.print("[HTTP] Intercepted Request: ");
+            Serial.print(method);
+            Serial.print(" -> ");
+            Serial.println(route);
+          }
+
+          String lowercaseLine = currentLine;
+          lowercaseLine.toLowerCase();
+
+          if (lowercaseLine.startsWith("content-length:")) {
+            int colonIdx = currentLine.indexOf(':');
+            if (colonIdx > 0) {
+              String sizeStr = currentLine.substring(colonIdx + 1);
+              sizeStr.trim();
+              contentLength = atol(sizeStr.c_str()); 
+            }
+          }
+
+          currentLine = "";
+        } else if (c != '\r') {
+          currentLine += c;
+        }
+      }
+    }
+
+    // --- STRATEGIC METHOD-BASED ROUTER BLOCK ---
+    if (method == "GET" && route == "/led") {
+      handleGetLedRoute(client);
+    } 
+    else if (method == "POST" && route == "/led1/pulse") {
+      handlePostLed1PulseRoute(client);
+    }
+    else if (method == "POST" && route == "/jammer") {
+      handlePostJammerRoute(client);
+    }
+    else if (method == "POST" && route == "/fan") {
+      handlePostFanRoute(client);
+    }
+    else if (method == "POST" && route == "/ota") {
+      handleOtaRoute(client, contentLength);
+    } 
+    else if (method == "POST" && route == "/notifRGB") {
+      handleNotifRGBControl(client);
+
+    }
+    // notifRGB
+    else if (method == "POST" && route == "/animateRGB") {
+      handleAnimateRGBControl(client);
+
+    }
+    else {
+      sendJSONResponse(client, 404, "{\"status\":\"error\",\"message\":\"Endpoint or Method unsupported\"}");
+    }
+
+    client.stop();
+  }
+}

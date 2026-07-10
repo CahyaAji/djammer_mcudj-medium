@@ -1,0 +1,52 @@
+#### Coba
+GET http://192.168.10.10/led
+Content-Type: application/json
+
+{
+    "status": true
+}
+
+#### Test Jammer On
+POST http://192.168.10.11/jammer
+Content-Type: application/json
+
+{
+    "jamm_freq": 5800,
+    "is_on": true
+}
+
+#### Test Jammer On
+POST http://192.168.10.10/jammer
+Content-Type: application/json
+
+{
+    "jamm_freq": 2400,
+    "is_on": false
+}
+
+#### Test Fan On
+POST http://192.168.10.11/fan
+Content-Type: application/json
+
+{
+    "is_on": false
+}
+
+#### Set RGB notification
+POST http://192.168.10.10/notifRGB
+Content-Type: application/json
+
+{
+    "is_on": true,
+    "r": 200,
+    "g": 20,
+    "b": 20
+}
+
+### ## Set RGB animation
+POST http://192.168.10.11/animateRGB
+Content-Type: application/json
+
+{
+    "is_on": true
+}
