@@ -33,7 +33,7 @@ Content-Type: application/json
 }
 
 #### Set RGB notification
-POST http://192.168.10.10/notifRGB
+POST http://192.168.10.11/notifRGB
 Content-Type: application/json
 
 {
@@ -43,10 +43,13 @@ Content-Type: application/json
     "b": 20
 }
 
-### ## Set RGB animation
+#### Set RGB animation
 POST http://192.168.10.11/animateRGB
 Content-Type: application/json
 
 {
     "is_on": true
 }
+
+#### Get Temperature
+GET http://192.168.10.11/temp

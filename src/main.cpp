@@ -5,6 +5,8 @@
 #include <IWatchdog.h>
 #include <ArduinoOTA.h>
 #include <Adafruit_NeoPixel.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 
 // W5500 Hardware Pins
@@ -33,6 +35,9 @@
 #define LED_RGB_NUM_PIXELS 7
 // #define BUZZER_PIN  PA8
 
+#define TEMP_SENSOR_PIN PB1
+// #define TEMP_SENSOR_1_PIN PB1
+
 struct TimedPulse {
   uint8_t pin;
   unsigned long endTime;
@@ -54,6 +59,27 @@ void checkPulse(TimedPulse &p) {
 // Parameter 3 = Pixel type flags, add together as needed (NEO_GRB is standard for WS2812)
 // notifRGB
 Adafruit_NeoPixel notifRGB(LED_RGB_NUM_PIXELS, LED_RGB_PIN, NEO_GRB + NEO_KHZ800);
+
+
+// Temperature sensor setup OneWire
+OneWire oneWire(TEMP_SENSOR_PIN);
+DallasTemperature tempSensor(&oneWire);
+
+// Network configuration
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x51 };
+IPAddress ip(192, 168, 10, 11);
+IPAddress gateway(192, 168, 10, 1);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress myDns(192, 168, 10, 1);
+
+EthernetServer server(80);
+
+float cachedTempC0 = -127.0f;
+float cachedTempC1 = -127.0f;
+unsigned long lastTempReadTime = 0;
+const unsigned long TEMP_READ_INTERVAL = 10000; // 10 seconds
+bool tempConversionRequested = false;
+unsigned long tempConversionStartTime = 0;
 
 // Animation state variables
 bool animationRunning = false;
@@ -83,14 +109,6 @@ void updateNotifAnimation() {
   notifRGB.show();
 }
 
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x51 };
-IPAddress ip(192, 168, 10, 11);
-IPAddress gateway(192, 168, 10, 1);
-IPAddress subnet(255, 255, 255, 0);
-IPAddress myDns(192, 168, 10, 1);
-
-EthernetServer server(80);
-
 void sendJSONResponse(EthernetClient& client, int statusCode, const String& jsonMessage) {
   client.print("HTTP/1.1 ");
   client.print(statusCode);
@@ -113,6 +131,18 @@ void handlePostLed1PulseRoute(EthernetClient& client) {
   led1Pulse.endTime = millis() + 3000;
   led1Pulse.active = true;
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"LED1 pulse started for 3 seconds\"}");
+}
+
+void handleGetTempRoute(EthernetClient& client) {
+  JsonDocument doc; 
+
+  doc["status"] = "success";
+  doc["temp_0_c"] = cachedTempC0;
+  doc["temp_1_c"] = cachedTempC1;
+
+  String jsonResponse;
+  serializeJson(doc, jsonResponse);
+  sendJSONResponse(client, 200, jsonResponse);
 }
 
 void handleNotifRGBControl(EthernetClient& client) {
@@ -327,6 +357,11 @@ void setup() {
   Serial.begin(115200);
   IWatchdog.begin(20000000); 
 
+  tempSensor.begin(); // Initialize the DallasTemperature library
+  Serial.print("TEMP sensor found: ");
+  Serial.println(tempSensor.getDeviceCount());
+
+
   pinMode(LED_BOARD, OUTPUT);
 
   pinMode(JAMM_1500_PIN, OUTPUT);
@@ -385,6 +420,21 @@ void loop() {
 
   // notifRGB
   updateNotifAnimation();
+
+  unsigned long tempTimeNow = millis();
+
+  if (!tempConversionRequested && (tempTimeNow - lastTempReadTime >= TEMP_READ_INTERVAL)) {
+    tempSensor.requestTemperatures();
+    tempConversionRequested = true;
+    tempConversionStartTime = tempTimeNow;
+  }
+
+  if (tempConversionRequested && (tempTimeNow - tempConversionStartTime >= 750)) {
+    cachedTempC0 = tempSensor.getTempCByIndex(0);
+    cachedTempC1 = tempSensor.getTempCByIndex(1);
+    lastTempReadTime = tempTimeNow;
+    tempConversionRequested = false;
+  }
 
   EthernetClient client = server.available();
   if (client) {
@@ -467,6 +517,12 @@ void loop() {
       handleAnimateRGBControl(client);
 
     }
+
+    // Temp route
+    else if (method == "GET" && route == "/temp") {
+      handleGetTempRoute(client);
+    }
+
     else {
       sendJSONResponse(client, 404, "{\"status\":\"error\",\"message\":\"Endpoint or Method unsupported\"}");
     }
