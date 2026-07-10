@@ -17,20 +17,20 @@
 #define W5500_RST   PB8
 
 // JAMM Pin
-#define JAMM_1500_PIN  PA5
 #define JAMM_900_PIN   PA3
+#define JAMM_1500_PIN  PA5
 #define JAMM_2400_PIN  PA2
 #define JAMM_5200_PIN  PA1
 #define JAMM_5800_PIN  PA0
 
 // FAN Pin
 #define FAN_PIN    PA4
-#define SSR_SPARE  PA6
+// #define SSR_SPARE  PA6
 
 // STATE Pin
 #define LED_BOARD PC13
-#define LED1_PIN  PB14
-#define LED2_PIN  PB15
+// #define LED1_PIN  PB14
+// #define LED2_PIN  PB15
 #define LED_RGB_PIN PA7
 #define LED_RGB_NUM_PIXELS 7
 // #define BUZZER_PIN  PA8
@@ -38,13 +38,22 @@
 #define TEMP_SENSOR_PIN PB1
 // #define TEMP_SENSOR_1_PIN PB1
 
+// Jammer Output State Sensor Pins
+#define JAMM_900_SENS_PIN   PB9
+#define JAMM_1500_SENS_PIN  PC14
+#define JAMM_2400_SENS_PIN  PB7
+#define JAMM_5200_SENS_PIN  PB6
+#define JAMM_5800_SENS_PIN  PC13
+// #define SPARE_SENS_PIN      PC15
+
+
 struct TimedPulse {
   uint8_t pin;
   unsigned long endTime;
   bool active;
 };
 
-TimedPulse led1Pulse = { LED1_PIN, 0, false };
+TimedPulse ledPulse = { LED_BOARD, 0, false };
 
 void checkPulse(TimedPulse &p) {
   if (p.active && millis() >= p.endTime) {
@@ -87,26 +96,52 @@ bool manualOverride = false;
 unsigned long lastAnimationUpdate = 0;
 const unsigned long animationInterval = 20; // 50 FPS
 // notifRGB
-uint16_t notifRotationOffset = 0;  // Current hue rotation offset (0-65535)
+uint8_t notifRotationOffset = 0;    // Current rotating dot position (0 to LED_RGB_NUM_PIXELS-1)
+uint8_t rotationFrameSkip = 0;      // Frame counter to slow down rotation
 
 // notifRGB
 void updateNotifAnimation() {
-  unsigned long now = millis();
-  if (now - lastAnimationUpdate < animationInterval) return;
-  lastAnimationUpdate = now;
+    unsigned long now = millis();
+    if (now - lastAnimationUpdate < animationInterval) return;
+    lastAnimationUpdate = now;
+    if (!animationRunning) return;
 
-  if (!animationRunning) return;
+    // Advance the rotating dot position every ~15 frames (300ms) for slower rotation
+    // Full rotation of 7 pixels takes ~2.1 seconds
+    rotationFrameSkip++;
+    if (rotationFrameSkip >= 15) {
+        rotationFrameSkip = 0;
+        notifRotationOffset = (notifRotationOffset + 1) % LED_RGB_NUM_PIXELS;
+    }
 
-  // Advance the rotation offset for smooth spinning effect
-  notifRotationOffset += 512;
+    // Triangle-wave breathing for dark purple dimming
+    // Phase cycles 0-511, creating a smooth pulse
+    uint16_t phase = (now / 10) & 0x1FF;
+    uint8_t breathe;
+    if (phase > 255) {
+        breathe = 511 - phase;  // falling edge
+    } else {
+        breathe = phase;        // rising edge
+    }
+    // Scale to dim purple range: ~3 to ~28
+    breathe = (breathe * 25 / 255) + 3;
 
-  // Set each pixel to a hue based on its position + rotation offset
-  for (int i = 0; i < LED_RGB_NUM_PIXELS; i++) {
-    uint16_t hue = (uint16_t)((uint32_t)i * 65536 / LED_RGB_NUM_PIXELS) + notifRotationOffset;
-    notifRGB.setPixelColor(i, notifRGB.ColorHSV(hue, 255, 255));
-  }
+    // Blue dot is offset by ~half the ring for visual balance
+    uint8_t bluePos = (notifRotationOffset + 3) % LED_RGB_NUM_PIXELS;
 
-  notifRGB.show();
+    for (int i = 0; i < LED_RGB_NUM_PIXELS; i++) {
+        if (i == notifRotationOffset) {
+            // Red dot at full brightness
+            notifRGB.setPixelColor(i, notifRGB.Color(255, 0, 0));
+        } else if (i == bluePos) {
+            // Blue dot at full brightness
+            notifRGB.setPixelColor(i, notifRGB.Color(0, 0, 255));
+        } else {
+            // Dark purple background with slow breathing
+            notifRGB.setPixelColor(i, notifRGB.Color(breathe / 2, 0, breathe));
+        }
+    }
+    notifRGB.show();
 }
 
 void sendJSONResponse(EthernetClient& client, int statusCode, const String& jsonMessage) {
@@ -127,9 +162,9 @@ void handleGetLedRoute(EthernetClient& client) {
 
 // --- Route: POST /led1/pulse (Turn on LED1 for 3 seconds) ---
 void handlePostLed1PulseRoute(EthernetClient& client) {
-  digitalWrite(led1Pulse.pin, HIGH); 
-  led1Pulse.endTime = millis() + 3000;
-  led1Pulse.active = true;
+  digitalWrite(ledPulse.pin, HIGH); 
+  ledPulse.endTime = millis() + 3000;
+  ledPulse.active = true;
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"LED1 pulse started for 3 seconds\"}");
 }
 
@@ -371,10 +406,8 @@ void setup() {
   pinMode(JAMM_5800_PIN, OUTPUT);
 
   pinMode(FAN_PIN, OUTPUT);
-  pinMode(SSR_SPARE, OUTPUT);
 
-  pinMode(LED1_PIN, OUTPUT);
-  pinMode(LED2_PIN, OUTPUT);
+  pinMode(LED_BOARD, OUTPUT);
   // pinMode(LED_PWM_PIN, OUTPUT);
   // pinMode(BUZZER_PIN, OUTPUT);
 
@@ -384,11 +417,8 @@ void setup() {
   digitalWrite(JAMM_5200_PIN, LOW);
   digitalWrite(JAMM_5800_PIN, LOW);
   digitalWrite(FAN_PIN, LOW);
-  digitalWrite(SSR_SPARE, LOW);
-  digitalWrite(LED1_PIN, LOW);
-  digitalWrite(LED2_PIN, LOW);
-  // digitalWrite(LED1_PIN, HIGH);
-  // digitalWrite(LED2_PIN, HIGH);
+  digitalWrite(LED_BOARD, LOW);
+  // digitalWrite(LED_BOARD, HIGH);
 
   notifRGB.begin();
   notifRGB.show(); // Initialize all pixels to 'off'
@@ -416,7 +446,7 @@ void setup() {
 void loop() {
   IWatchdog.reload();
 
-  checkPulse(led1Pulse);
+  checkPulse(ledPulse);
 
   // notifRGB
   updateNotifAnimation();
