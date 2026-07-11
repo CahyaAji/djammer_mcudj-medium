@@ -77,11 +77,10 @@ void checkPulse(TimedPulse &p) {
   }
 }
 
-// NeoPixel configuration
+// notifRGB (no 6 is middle of the ring)
 // Parameter 1 = Number of pixels in strip
 // Parameter 2 = Arduino pin number (most are valid)
 // Parameter 3 = Pixel type flags, add together as needed (NEO_GRB is standard for WS2812)
-// notifRGB
 Adafruit_NeoPixel notifRGB(LED_RGB_NUM_PIXELS, LED_RGB_PIN, NEO_GRB + NEO_KHZ800);
 
 // Temperature sensor setup OneWire
@@ -292,8 +291,8 @@ void handleNotifRGBControl(EthernetClient& client) {
     return;
   }
 
-  if (!doc["is_on"].is<bool>() || !doc["r"].is<int>() || !doc["g"].is<int>() || !doc["b"].is<int>()) {
-    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys (is_on, r, g, b required)\"}");
+  if (!doc["is_on"].is<bool>() || !doc["r"].is<int>() || !doc["g"].is<int>() || !doc["b"].is<int>() || !doc["numb"].is<byte>()) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys (is_on, r, g, b, numb required)\"}");
     return;
   }
 
@@ -303,19 +302,21 @@ void handleNotifRGBControl(EthernetClient& client) {
     int r = doc["r"];
     int g = doc["g"];
     int b = doc["b"];
+    byte numb = doc["numb"];
 
     // Boundary check for RGB ranges
-    if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
-        sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"RGB values must be 0-255\"}");
+    if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255 || numb >= LED_RGB_NUM_PIXELS) {
+        sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"RGB values must be 0-255 and pixel index must be valid\"}");
         return;
     }
 
     if(isOn == false) {
       notifRGB.clear();
     } else {
-      for(int i=0; i<LED_RGB_NUM_PIXELS; i++) {
-        notifRGB.setPixelColor(i, notifRGB.Color(r, g, b));
-      }
+      // for(int i=0; i<LED_RGB_NUM_PIXELS; i++) {
+      //   notifRGB.setPixelColor(i, notifRGB.Color(r, g, b));
+      // }
+      notifRGB.setPixelColor(numb, notifRGB.Color(r, g, b));
     }
 
     notifRGB.show();
@@ -324,6 +325,7 @@ void handleNotifRGBControl(EthernetClient& client) {
     responseDoc["success"] = true;
     responseDoc["is_on"] = isOn ? "ON" : "OFF";
     responseDoc["color"] = String(r) + "," + String(g) + "," + String(b);
+    responseDoc["pixel"] = numb;
 
     String jsonResponse;
     serializeJson(responseDoc, jsonResponse);
