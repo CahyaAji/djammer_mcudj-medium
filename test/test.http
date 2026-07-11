@@ -21,7 +21,7 @@ Content-Type: application/json
 
 {
     "jamm_freq": 2400,
-    "is_on": false
+    "is_on": true
 }
 
 #### Test Fan On
@@ -37,7 +37,7 @@ POST http://192.168.10.11/notifRGB
 Content-Type: application/json
 
 {
-    "is_on": true,
+    "is_on": false,
     "r": 20,
     "g": 200,
     "b": 200
@@ -53,3 +53,6 @@ Content-Type: application/json
 
 #### Get Temperature
 GET http://192.168.10.11/temp
+
+#### Get Jammer Status
+GET http://192.168.10.11/jamm_state
