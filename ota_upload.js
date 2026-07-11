@@ -6,8 +6,6 @@ const action = process.argv[2];
 
 if (!action) {
     console.log("Valid operations:");
-    console.log("  node ota_upload.js on                  -> POST /led (JSON structure)");
-    console.log("  node ota_upload.js off                 -> POST /led (JSON structure)");
     console.log("  node ota_upload.js stm32_ota.ino.bin   -> POST /ota (Binary upload)");
     process.exit(0);
 }
@@ -37,44 +35,35 @@ function sendHttpRequest(path, method, headers, payloadData) {
     req.end();
 }
 
-// --- MODE: PROCESSING LED SWAPPINGS VIA JSON PAYLOAD ---
-if (action.toLowerCase() === 'on' || action.toLowerCase() === 'off') {
-    const targetStatus = action.toLowerCase() === 'on';
-    const jsonBody = JSON.stringify({ status: targetStatus });
-
-    console.log(`🔌 Dispatching JSON structural update to http://${TARGET_IP}/led`);
-    
-    sendHttpRequest('/led', 'POST', {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(jsonBody)
-    }, jsonBody);
-} 
-// --- MODE: PROCESSING FIRMWARE IMAGE TRANSFER ---
-else {
-    if (!fs.existsSync(action)) {
-        console.error(`❌ Error: Compilation file '${action}' missing.`);
-        process.exit(1);
-    }
-
-    const binaryData = fs.readFileSync(action);
-    const fileSizeInBytes = binaryData.length;
-    const fileSizeInKB = (fileSizeInBytes / 1024).toFixed(2);
-
-    console.log(`\n📦 Firmware Target Details:`);
-    console.log(`----------------------------------------`);
-    console.log(`📄 File Name   : ${action}`);
-    console.log(`📊 Binary Size : ${fileSizeInBytes} bytes (${fileSizeInKB} KB)`);
-    console.log(`----------------------------------------`);
-
-    // Guard rail check before sending
-    if (fileSizeInBytes > 245760) {
-        console.error(`⚠️ Warning: Size exceeds safe STM32F411 partition thresholds (240 KB)! Update might fail.`);
-    }
-
-    console.log(`🚀 Streaming flashing data out to http://${TARGET_IP}/ota...`);
-
-    sendHttpRequest('/ota', 'POST', {
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': fileSizeInBytes
-    }, binaryData);
+// --- FIRMWARE IMAGE TRANSFER (OTA) ---
+if (!fs.existsSync(action)) {
+    console.error(`❌ Error: Compilation file '${action}' missing.`);
+    process.exit(1);
 }
+
+const binaryData = fs.readFileSync(action);
+const fileSizeInBytes = binaryData.length;
+const fileSizeInKB = (fileSizeInBytes / 1024).toFixed(2);
+
+console.log(`\n📦 Firmware Target Details:`);
+console.log(`----------------------------------------`);
+console.log(`📄 File Name   : ${action}`);
+console.log(`📊 Binary Size : ${fileSizeInBytes} bytes (${fileSizeInKB} KB)`);
+console.log(`----------------------------------------`);
+
+// STM32F411 flash size: 512 KB
+// Warn at 30% (157,286 bytes), abort at 46% (241,172 bytes)
+if (fileSizeInBytes > 241172) {
+    console.error(`❌ Firmware size ${fileSizeInKB} KB exceeds 46% of STM32F411 flash (512 KB). Upload cancelled.`);
+    process.exit(1);
+}
+if (fileSizeInBytes > 157286) {
+    console.warn(`⚠️ Warning: Firmware size ${fileSizeInKB} KB exceeds 30% of STM32F411 flash (512 KB). Proceed with caution.`);
+}
+
+console.log(`🚀 Streaming flashing data out to http://${TARGET_IP}/ota...`);
+
+sendHttpRequest('/ota', 'POST', {
+    'Content-Type': 'application/octet-stream',
+    'Content-Length': fileSizeInBytes
+}, binaryData);
