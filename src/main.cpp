@@ -140,39 +140,29 @@ void updateNotifAnimation() {
     if (!animationRunning) return;
 
     // Advance the rotating dot position every ~15 frames (300ms) for slower rotation
-    // Full rotation of 7 pixels takes ~2.1 seconds
+    // Full rotation of 6 ring pixels takes ~1.8 seconds
     rotationFrameSkip++;
     if (rotationFrameSkip >= 15) {
         rotationFrameSkip = 0;
-        notifRotationOffset = (notifRotationOffset + 1) % LED_RGB_NUM_PIXELS;
+        // Rotate only on the ring (indices 0-5), skip center (index 6)
+        notifRotationOffset = (notifRotationOffset + 1) % (LED_RGB_NUM_PIXELS - 1);
     }
-
-    // Triangle-wave breathing for dark purple dimming
-    // Phase cycles 0-511, creating a smooth pulse
-    // Using modulo to prevent overflow issues in phase calculation
-    uint16_t phase = ((now / 10) % 512);
-    uint8_t breathe;
-    if (phase > 255) {
-        breathe = 511 - phase;  // falling edge
-    } else {
-        breathe = phase;        // rising edge
-    }
-    // Scale to dim purple range: ~3 to ~28
-    breathe = (breathe * 25 / 255) + 3;
-
-    // Blue dot is offset by ~half the ring for visual balance
-    uint8_t bluePos = (notifRotationOffset + 3) % LED_RGB_NUM_PIXELS;
 
     for (int i = 0; i < LED_RGB_NUM_PIXELS; i++) {
-        if (i == notifRotationOffset) {
-            // Red dot at full brightness
-            notifRGB.setPixelColor(i, notifRGB.Color(255, 0, 0));
-        } else if (i == bluePos) {
-            // Blue dot at full brightness
+        if (i == 6) {
+            // Center LED: steady red
+            notifRGB.setPixelColor(i, notifRGB.Color(0, 0, 0));
+        } else if (i == notifRotationOffset) {
+            // Rotating blue dot on the ring
             notifRGB.setPixelColor(i, notifRGB.Color(0, 0, 255));
-        } else {
-            // Dark purple background with slow breathing
-            notifRGB.setPixelColor(i, notifRGB.Color(breathe / 2, 0, breathe));
+        } 
+        // else if (i == (notifRotationOffset + 2) % (LED_RGB_NUM_PIXELS - 1)) {
+        //     // Rotating red dot on the ring
+        //     notifRGB.setPixelColor(i, notifRGB.Color(255, 0, 0));
+        // } 
+        else {
+            // Ring background: off
+            notifRGB.setPixelColor(i, notifRGB.Color(5, 5, 0));
         }
     }
     notifRGB.show();
@@ -391,6 +381,39 @@ void handlePostFanRoute(EthernetClient& client) {
   digitalWrite(FAN_PIN, isOn);
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Fan state updated\"}");
 
+}
+
+void handlePostJammersRoute(EthernetClient& client) {
+  JsonDocument doc; 
+  DeserializationError error = deserializeJson(doc, client);
+
+  if (error) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
+    return;
+  }
+
+  // Validate that required keys
+  if (!doc["jamm_900"].is<bool>() || !doc["jamm_1500"].is<bool>() || !doc["jamm_2400"].is<bool>() || !doc["jamm_5200"].is<bool>() || !doc["jamm_5800"].is<bool>()) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys: jamm_900, jamm_1500, jamm_2400, jamm_5200, jamm_5800 (boolean required)\"}");
+    return;
+  }
+
+  DEBUG_PRINTLN("[HTTP] Received Jammers Control Command");
+
+  // Process the jammer commands
+  bool is900on = doc["jamm_900"];
+  bool is1500on = doc["jamm_1500"];
+  bool is2400on = doc["jamm_2400"];
+  bool is5200on = doc["jamm_5200"];
+  bool is5800on = doc["jamm_5800"];
+
+  digitalWrite(JAMM_900_PIN, is900on);
+  digitalWrite(JAMM_1500_PIN, is1500on);
+  digitalWrite(JAMM_2400_PIN, is2400on);
+  digitalWrite(JAMM_5200_PIN, is5200on);
+  digitalWrite(JAMM_5800_PIN, is5800on);
+
+  sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Jammers state updated\"}");
 }
 
 void handlePostJammerRoute(EthernetClient& client) {
@@ -647,6 +670,9 @@ void loop() {
     }
     else if (method == "POST" && route == "/jammer") {
       handlePostJammerRoute(client);
+    }
+    else if (method == "POST" && route == "/jammers") {
+      handlePostJammersRoute(client);
     }
     else if (method == "POST" && route == "/fan") {
       handlePostFanRoute(client);

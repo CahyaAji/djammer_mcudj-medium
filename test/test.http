@@ -21,7 +21,31 @@ Content-Type: application/json
 
 {
     "jamm_freq": 2400,
-    "is_on": true
+    "is_on": false
+}
+
+#### Test Multi Jammer On
+POST http://192.168.10.11/jammers
+Content-Type: application/json
+
+{
+    "jamm_900": true,
+    "jamm_1500": true,
+    "jamm_2400": true,
+    "jamm_5200": true,
+    "jamm_5800": true
+}
+
+#### Test Multi Jammer Off
+POST http://192.168.10.11/jammers
+Content-Type: application/json
+
+{
+    "jamm_900": false,
+    "jamm_1500": false,
+    "jamm_2400": false,
+    "jamm_5200": false,
+    "jamm_5800": false
 }
 
 #### Test Fan On
@@ -49,7 +73,7 @@ POST http://192.168.10.11/animateRGB
 Content-Type: application/json
 
 {
-    "is_on": true
+    "is_on": false
 }
 
 #### Get Temperature
