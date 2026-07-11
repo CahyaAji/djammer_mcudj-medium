@@ -69,10 +69,31 @@ struct TimedPulse {
 
 TimedPulse ledPulse = { LED_BOARD, 0, false };
 
+// Jammer delayed turn-off structure
+struct JammerTimedPulse {
+  unsigned long endTime;
+  bool active;
+};
+
+JammerTimedPulse jammerPulse = { 0, false };
+
 void checkPulse(TimedPulse &p) {
   // Overflow-safe comparison: checks if current time has passed endTime
   if (p.active && (millis() - p.endTime) < 0x80000000UL) {
     digitalWrite(p.pin, LOW);
+    p.active = false;
+  }
+}
+
+void checkJammerPulse(JammerTimedPulse &p) {
+  // Overflow-safe comparison: checks if current time has passed endTime
+  if (p.active && (millis() - p.endTime) < 0x80000000UL) {
+    // Turn off all 5 jammer pins
+    digitalWrite(JAMM_900_PIN, LOW);
+    digitalWrite(JAMM_1500_PIN, LOW);
+    digitalWrite(JAMM_2400_PIN, LOW);
+    digitalWrite(JAMM_5200_PIN, LOW);
+    digitalWrite(JAMM_5800_PIN, LOW);
     p.active = false;
   }
 }
@@ -145,13 +166,14 @@ void updateNotifAnimation() {
     if (rotationFrameSkip >= 15) {
         rotationFrameSkip = 0;
         // Rotate only on the ring (indices 0-5), skip center (index 6)
-        notifRotationOffset = (notifRotationOffset + 1) % (LED_RGB_NUM_PIXELS - 1);
+        // Decrement for clockwise rotation
+        notifRotationOffset = (notifRotationOffset - 1 + (LED_RGB_NUM_PIXELS - 1)) % (LED_RGB_NUM_PIXELS - 1);
     }
 
     for (int i = 0; i < LED_RGB_NUM_PIXELS; i++) {
         if (i == 6) {
             // Center LED: steady red
-            notifRGB.setPixelColor(i, notifRGB.Color(0, 0, 0));
+            notifRGB.setPixelColor(i, notifRGB.Color(5, 5, 0));
         } else if (i == notifRotationOffset) {
             // Rotating blue dot on the ring
             notifRGB.setPixelColor(i, notifRGB.Color(0, 0, 255));
@@ -245,6 +267,45 @@ void handlePostLed1PulseRoute(EthernetClient& client) {
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"LED1 pulse started for 3 seconds\"}");
 }
 
+// --- Route: POST /jammer/pulse (Turn on selected jammers, turn off all after 20 seconds) ---
+void handlePostJammerPulseRoute(EthernetClient& client) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, client);
+
+  if (error) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
+    return;
+  }
+
+  // Validate that required keys exist
+  if (!doc["jamm_900"].is<bool>() || !doc["jamm_1500"].is<bool>() || !doc["jamm_2400"].is<bool>() || !doc["jamm_5200"].is<bool>() || !doc["jamm_5800"].is<bool>()) {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys: jamm_900, jamm_1500, jamm_2400, jamm_5200, jamm_5800 (boolean required)\"}");
+    return;
+  }
+
+  DEBUG_PRINTLN("[HTTP] Received Jammer Pulse Command");
+
+  // Turn on selected jammers
+  bool is900on = doc["jamm_900"];
+  bool is1500on = doc["jamm_1500"];
+  bool is2400on = doc["jamm_2400"];
+  bool is5200on = doc["jamm_5200"];
+  bool is5800on = doc["jamm_5800"];
+
+  digitalWrite(JAMM_900_PIN, is900on);
+  digitalWrite(JAMM_1500_PIN, is1500on);
+  digitalWrite(JAMM_2400_PIN, is2400on);
+  digitalWrite(JAMM_5200_PIN, is5200on);
+  digitalWrite(JAMM_5800_PIN, is5800on);
+
+  // Start/reset 20-second timer to turn off all jammers
+  // Overflow-safe: endTime will wrap correctly with unsigned arithmetic
+  jammerPulse.endTime = millis() + 20000UL;
+  jammerPulse.active = true;
+
+  sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Jammers updated, auto turn-off in 20 seconds (timer reset)\"}");
+}
+
 void handleGetTempRoute(EthernetClient& client) {
   JsonDocument doc; 
 
@@ -303,9 +364,6 @@ void handleNotifRGBControl(EthernetClient& client) {
     if(isOn == false) {
       notifRGB.clear();
     } else {
-      // for(int i=0; i<LED_RGB_NUM_PIXELS; i++) {
-      //   notifRGB.setPixelColor(i, notifRGB.Color(r, g, b));
-      // }
       notifRGB.setPixelColor(numb, notifRGB.Color(r, g, b));
     }
 
@@ -566,6 +624,9 @@ void loop() {
 
   // Check LED pulse timing (runs every loop for precision)
   checkPulse(ledPulse);
+  
+  // Check jammer pulse timing (runs every loop for precision)
+  checkJammerPulse(jammerPulse);
 
   // Get current time once for all timing checks
   unsigned long currentTime = millis();
@@ -667,6 +728,9 @@ void loop() {
     } 
     else if (method == "POST" && route == "/led1/pulse") {
       handlePostLed1PulseRoute(client);
+    }
+    else if (method == "POST" && route == "/jammer/pulse") {
+      handlePostJammerPulseRoute(client);
     }
     else if (method == "POST" && route == "/jammer") {
       handlePostJammerRoute(client);

@@ -62,9 +62,21 @@ Content-Type: application/json
 
 {
     "is_on": true,
-    "r": 0,
+    "r": 200,
     "g": 0,
-    "b": 200,
+    "b": 0,
+    "numb": 0
+}
+
+#### Set RGB notification
+POST http://192.168.10.11/notifRGB
+Content-Type: application/json
+
+{
+    "is_on": false,
+    "r": 200,
+    "g": 0,
+    "b": 0,
     "numb": 0
 }
 
@@ -73,7 +85,7 @@ POST http://192.168.10.11/animateRGB
 Content-Type: application/json
 
 {
-    "is_on": false
+    "is_on": true
 }
 
 #### Get Temperature
@@ -81,3 +93,15 @@ GET http://192.168.10.11/temp
 
 #### Get Jammer Status
 GET http://192.168.10.11/jamm_state
+
+#### Jammer Pulse - Turn on selected, auto turn off all in 20 seconds
+POST http://192.168.10.11/jammer/pulse
+Content-Type: application/json
+
+{
+    "jamm_900": false,
+    "jamm_1500": true,
+    "jamm_2400": false,
+    "jamm_5200": true,
+    "jamm_5800": false
+}
