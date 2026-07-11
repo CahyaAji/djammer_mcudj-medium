@@ -8,6 +8,20 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
+// ============================================
+// DEBUG CONFIGURATION
+// Set to false for production/release builds
+// ============================================
+#define DEBUG_ENABLED true
+
+// Debug print macros - automatically disabled when DEBUG_ENABLED is false
+#if DEBUG_ENABLED
+  #define DEBUG_PRINT(x)    Serial.print(x)
+  #define DEBUG_PRINTLN(x)  Serial.println(x)
+#else
+  #define DEBUG_PRINT(x)
+  #define DEBUG_PRINTLN(x)
+#endif
 
 // W5500 Hardware Pins
 #define W5500_SCK   PB3
@@ -70,12 +84,12 @@ void checkPulse(TimedPulse &p) {
 // notifRGB
 Adafruit_NeoPixel notifRGB(LED_RGB_NUM_PIXELS, LED_RGB_PIN, NEO_GRB + NEO_KHZ800);
 
-
 // Temperature sensor setup OneWire
 OneWire oneWire(TEMP_SENSOR_PIN);
 DallasTemperature tempSensor(&oneWire);
 
 // Network configuration
+// Mark change IP for different devices
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x51 };
 IPAddress ip(192, 168, 10, 11);
 IPAddress gateway(192, 168, 10, 1);
@@ -93,7 +107,13 @@ bool isJammer5800On = false;
 
 // Jammer sensor reading throttling
 unsigned long lastJammerSensorReadTime = 0;
-const unsigned long JAMMER_SENSOR_READ_INTERVAL = 2000UL; // 1 second
+const unsigned long JAMMER_SENSOR_READ_INTERVAL = 2000UL; // in milliseconds
+
+// Network health monitoring
+unsigned long lastNetworkCheckTime = 0;
+const unsigned long NETWORK_CHECK_INTERVAL = 30000UL; // Check every 30 seconds
+uint8_t networkFailureCount = 0;
+const uint8_t MAX_NETWORK_FAILURES = 3; // Reinit after 3 consecutive failures
 
 float cachedTempC0 = -127.0f;
 float cachedTempC1 = -127.0f;
@@ -159,6 +179,58 @@ void updateNotifAnimation() {
     notifRGB.show();
 }
 
+// Network initialization and recovery function
+void initializeNetwork() {
+  DEBUG_PRINTLN("[NET] Initializing network...");
+  
+  // Hard Reset W5500
+  pinMode(W5500_RST, OUTPUT);
+  digitalWrite(W5500_RST, LOW);
+  delay(100);
+  digitalWrite(W5500_RST, HIGH);
+  delay(300);
+  
+  SPI.setMOSI(W5500_MOSI);
+  SPI.setMISO(W5500_MISO);
+  SPI.setSCLK(W5500_SCK);
+  SPI.begin();
+
+  Ethernet.init(W5500_CS);
+  Ethernet.begin(mac, ip, myDns, gateway, subnet);
+  
+  // Give it time to stabilize
+  delay(500);
+  
+  server.begin();
+
+  DEBUG_PRINT("[NET] Server listening on: http://");
+  DEBUG_PRINTLN(Ethernet.localIP());
+}
+
+// Check network health and recover if needed
+void checkNetworkHealth() {
+  // Check link status using W5500 hardware
+  uint8_t linkStatus = Ethernet.linkStatus();
+  
+  if (linkStatus == LinkOFF) {
+    networkFailureCount++;
+    DEBUG_PRINT("[NET] Link DOWN detected. Failure count: ");
+    DEBUG_PRINTLN(networkFailureCount);
+    
+    if (networkFailureCount >= MAX_NETWORK_FAILURES) {
+      DEBUG_PRINTLN("[NET] Max failures reached. Reinitializing network...");
+      initializeNetwork();
+      networkFailureCount = 0;
+    }
+  } else if (linkStatus == LinkON) {
+    // Link is good, reset failure counter
+    if (networkFailureCount > 0) {
+      DEBUG_PRINTLN("[NET] Link restored.");
+      networkFailureCount = 0;
+    }
+  }
+}
+
 void sendJSONResponse(EthernetClient& client, int statusCode, const String& jsonMessage) {
   client.print("HTTP/1.1 ");
   client.print(statusCode);
@@ -196,6 +268,21 @@ void handleGetTempRoute(EthernetClient& client) {
   sendJSONResponse(client, 200, jsonResponse);
 }
 
+void handleGetJammStateRoute(EthernetClient& client) {
+  JsonDocument doc; 
+
+  doc["status"] = "success";
+  doc["jamm_900"] = isJammer900On;
+  doc["jamm_1500"] = isJammer1500On;
+  doc["jamm_2400"] = isJammer2400On;
+  doc["jamm_5200"] = isJammer5200On;
+  doc["jamm_5800"] = isJammer5800On;
+
+  String jsonResponse;
+  serializeJson(doc, jsonResponse);
+  sendJSONResponse(client, 200, jsonResponse);
+}
+
 void handleNotifRGBControl(EthernetClient& client) {
   JsonDocument doc; 
   DeserializationError error = deserializeJson(doc, client);
@@ -210,7 +297,7 @@ void handleNotifRGBControl(EthernetClient& client) {
     return;
   }
 
-    Serial.println("Received /notifRGB request");
+    DEBUG_PRINTLN("[HTTP] Received /notifRGB request");
 
     bool isOn = doc["is_on"];
     int r = doc["r"];
@@ -259,7 +346,7 @@ void handleAnimateRGBControl(EthernetClient& client) {
     return;
   }
 
-    Serial.println("Received /animateRGB request");
+    DEBUG_PRINTLN("[HTTP] Received /animateRGB request");
 
     bool isOn = doc["is_on"];
 
@@ -296,7 +383,7 @@ void handlePostFanRoute(EthernetClient& client) {
     return;
   }
 
-  Serial.print("[HTTP] Received Fan Control Command");
+  DEBUG_PRINTLN("[HTTP] Received Fan Control Command");
 
   bool isOn = doc["is_on"];
   digitalWrite(FAN_PIN, isOn);
@@ -319,7 +406,7 @@ void handlePostJammerRoute(EthernetClient& client) {
     return;
   }
 
-  Serial.print("[HTTP] Received Jammer Command");
+  DEBUG_PRINTLN("[HTTP] Received Jammer Command");
 
   // Process the jammer command
   int jammerFreq = doc["jamm_freq"];
@@ -346,10 +433,10 @@ void handlePostJammerRoute(EthernetClient& client) {
         return;
     }
 
-    Serial.print("[HTTP] Jammer frequency ");
-    Serial.print(jammerFreq);
-    Serial.print(" is now ");
-    Serial.println(isOn ? "ON" : "OFF");
+    DEBUG_PRINT("[HTTP] Jammer frequency ");
+    DEBUG_PRINT(jammerFreq);
+    DEBUG_PRINT(" is now ");
+    DEBUG_PRINTLN(isOn ? "ON" : "OFF");
     String response = "{\"success\": true,\"message\":\"Jammer frequency " + String(jammerFreq) + " is now " + (isOn ? "ON" : "OFF") + "\"}";
     sendJSONResponse(client, 200, response);
 }
@@ -361,9 +448,9 @@ void handleOtaRoute(EthernetClient& client, long expectedSize) {
     return;
   }
 
-  Serial.print("[OTA] Initializing landing partition allocation for: ");
-  Serial.print(expectedSize);
-  Serial.println(" bytes.");
+  DEBUG_PRINT("[OTA] Initializing landing partition allocation for: ");
+  DEBUG_PRINT(expectedSize);
+  DEBUG_PRINTLN(" bytes.");
 
   if (InternalStorage.open(expectedSize)) {
     uint8_t buffer[512];
@@ -386,17 +473,17 @@ void handleOtaRoute(EthernetClient& client, long expectedSize) {
     }
     InternalStorage.close();
 
-    Serial.print("[OTA] Extraction finished. Received count: ");
-    Serial.println(totalReceived);
+    DEBUG_PRINT("[OTA] Extraction finished. Received count: ");
+    DEBUG_PRINTLN(totalReceived);
 
     if (totalReceived == expectedSize) {
-      Serial.println("[OTA] Verification Success! Performing system remap...");
+      DEBUG_PRINTLN("[OTA] Verification Success! Performing system remap...");
       sendJSONResponse(client, 200, "{\"status\":\"success\",\"message\":\"Flashing complete. Rebooting.\"}");
       client.stop();
       delay(500);
-      InternalStorage.apply(); 
+      InternalStorage.apply();
     } else {
-      Serial.println("[OTA] Critical Fail: Packet sizes do not match header metadata.");
+      DEBUG_PRINTLN("[OTA] Critical Fail: Packet sizes do not match header metadata.");
     }
   }
   
@@ -409,8 +496,8 @@ void setup() {
   IWatchdog.begin(20000000); 
 
   tempSensor.begin(); // Initialize the DallasTemperature library
-  Serial.print("TEMP sensor found: ");
-  Serial.println(tempSensor.getDeviceCount());
+  DEBUG_PRINT("[TEMP] Sensors found: ");
+  DEBUG_PRINTLN(tempSensor.getDeviceCount());
 
 
   pinMode(LED_BOARD, OUTPUT);
@@ -445,24 +532,8 @@ void setup() {
   notifRGB.begin();
   notifRGB.show(); // Initialize all pixels to 'off'
 
-  // Hard Reset W5500
-  pinMode(W5500_RST, OUTPUT);
-  digitalWrite(W5500_RST, LOW);
-  delay(100);
-  digitalWrite(W5500_RST, HIGH);
-  delay(300);
-  
-  SPI.setMOSI(W5500_MOSI);
-  SPI.setMISO(W5500_MISO);
-  SPI.setSCLK(W5500_SCK);
-  SPI.begin();
-
-  Ethernet.init(W5500_CS);
-  Ethernet.begin(mac, ip, myDns, gateway, subnet);
-  server.begin();
-
-  Serial.print("[NET] Wired Server actively listening on: http://");
-  Serial.println(Ethernet.localIP());
+  // Initialize network with recovery capability
+  initializeNetwork();
 }
 
 void loop() {
@@ -476,16 +547,22 @@ void loop() {
 
   // Throttled jammer sensor reading (every 1 second)
   if ((unsigned long)(currentTime - lastJammerSensorReadTime) >= JAMMER_SENSOR_READ_INTERVAL) {
-    isJammer900On = digitalRead(JAMM_900_SENS_PIN);
-    isJammer1500On = digitalRead(JAMM_1500_SENS_PIN);
-    isJammer2400On = digitalRead(JAMM_2400_SENS_PIN);
-    isJammer5200On = digitalRead(JAMM_5200_SENS_PIN);
-    isJammer5800On = digitalRead(JAMM_5800_SENS_PIN);
+    isJammer900On = (digitalRead(JAMM_900_SENS_PIN) == LOW);
+    isJammer1500On = (digitalRead(JAMM_1500_SENS_PIN) == LOW);
+    isJammer2400On = (digitalRead(JAMM_2400_SENS_PIN) == LOW);
+    isJammer5200On = (digitalRead(JAMM_5200_SENS_PIN) == LOW);
+    isJammer5800On = (digitalRead(JAMM_5800_SENS_PIN) == LOW);
     lastJammerSensorReadTime = currentTime;
   }
 
   // notifRGB animation update (throttled internally to 20ms)
   updateNotifAnimation();
+
+  // Network health check (every 30 seconds)
+  if ((unsigned long)(currentTime - lastNetworkCheckTime) >= NETWORK_CHECK_INTERVAL) {
+    checkNetworkHealth();
+    lastNetworkCheckTime = currentTime;
+  }
 
   // Overflow-safe interval check for temperature reading (every 10 seconds)
   if (!tempConversionRequested && ((unsigned long)(currentTime - lastTempReadTime) >= TEMP_READ_INTERVAL)) {
@@ -534,10 +611,10 @@ void loop() {
             method = currentLine.substring(0, firstSpace);
             route = currentLine.substring(firstSpace + 1, secondSpace);
 
-            Serial.print("[HTTP] Intercepted Request: ");
-            Serial.print(method);
-            Serial.print(" -> ");
-            Serial.println(route);
+            DEBUG_PRINT("[HTTP] Intercepted Request: ");
+            DEBUG_PRINT(method);
+            DEBUG_PRINT(" -> ");
+            DEBUG_PRINTLN(route);
           }
 
           String lowercaseLine = currentLine;
@@ -583,6 +660,17 @@ void loop() {
     else if (method == "POST" && route == "/animateRGB") {
       handleAnimateRGBControl(client);
 
+    }
+    // Jammer state route
+    else if (method == "GET" && route == "/jamm_state") {
+      isJammer900On = (digitalRead(JAMM_900_SENS_PIN) == LOW);
+      isJammer1500On = (digitalRead(JAMM_1500_SENS_PIN) == LOW);
+      isJammer2400On = (digitalRead(JAMM_2400_SENS_PIN) == LOW);
+      isJammer5200On = (digitalRead(JAMM_5200_SENS_PIN) == LOW);
+      isJammer5800On = (digitalRead(JAMM_5800_SENS_PIN) == LOW);
+      lastJammerSensorReadTime = currentTime;
+
+      handleGetJammStateRoute(client);
     }
 
     // Temp route
