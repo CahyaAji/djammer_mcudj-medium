@@ -56,7 +56,8 @@ struct TimedPulse {
 TimedPulse ledPulse = { LED_BOARD, 0, false };
 
 void checkPulse(TimedPulse &p) {
-  if (p.active && millis() >= p.endTime) {
+  // Overflow-safe comparison: checks if current time has passed endTime
+  if (p.active && (millis() - p.endTime) < 0x80000000UL) {
     digitalWrite(p.pin, LOW);
     p.active = false;
   }
@@ -83,10 +84,21 @@ IPAddress myDns(192, 168, 10, 1);
 
 EthernetServer server(80);
 
+// Jammer state variables
+bool isJammer900On = false;
+bool isJammer1500On = false;
+bool isJammer2400On = false;
+bool isJammer5200On = false;
+bool isJammer5800On = false;
+
+// Jammer sensor reading throttling
+unsigned long lastJammerSensorReadTime = 0;
+const unsigned long JAMMER_SENSOR_READ_INTERVAL = 2000UL; // 1 second
+
 float cachedTempC0 = -127.0f;
 float cachedTempC1 = -127.0f;
 unsigned long lastTempReadTime = 0;
-const unsigned long TEMP_READ_INTERVAL = 10000; // 10 seconds
+const unsigned long TEMP_READ_INTERVAL = 10000UL; // 10 seconds
 bool tempConversionRequested = false;
 unsigned long tempConversionStartTime = 0;
 
@@ -94,15 +106,17 @@ unsigned long tempConversionStartTime = 0;
 bool animationRunning = false;
 bool manualOverride = false;
 unsigned long lastAnimationUpdate = 0;
-const unsigned long animationInterval = 20; // 50 FPS
+const unsigned long animationInterval = 20UL; // 50 FPS (20ms per frame)
 // notifRGB
 uint8_t notifRotationOffset = 0;    // Current rotating dot position (0 to LED_RGB_NUM_PIXELS-1)
 uint8_t rotationFrameSkip = 0;      // Frame counter to slow down rotation
 
+
 // notifRGB
 void updateNotifAnimation() {
     unsigned long now = millis();
-    if (now - lastAnimationUpdate < animationInterval) return;
+    // Overflow-safe interval check
+    if ((unsigned long)(now - lastAnimationUpdate) < animationInterval) return;
     lastAnimationUpdate = now;
     if (!animationRunning) return;
 
@@ -116,7 +130,8 @@ void updateNotifAnimation() {
 
     // Triangle-wave breathing for dark purple dimming
     // Phase cycles 0-511, creating a smooth pulse
-    uint16_t phase = (now / 10) & 0x1FF;
+    // Using modulo to prevent overflow issues in phase calculation
+    uint16_t phase = ((now / 10) % 512);
     uint8_t breathe;
     if (phase > 255) {
         breathe = 511 - phase;  // falling edge
@@ -162,8 +177,9 @@ void handleGetLedRoute(EthernetClient& client) {
 
 // --- Route: POST /led1/pulse (Turn on LED1 for 3 seconds) ---
 void handlePostLed1PulseRoute(EthernetClient& client) {
-  digitalWrite(ledPulse.pin, HIGH); 
-  ledPulse.endTime = millis() + 3000;
+  digitalWrite(ledPulse.pin, HIGH);
+  // Overflow-safe: endTime will wrap correctly with unsigned arithmetic
+  ledPulse.endTime = millis() + 3000UL;
   ledPulse.active = true;
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"LED1 pulse started for 3 seconds\"}");
 }
@@ -399,8 +415,8 @@ void setup() {
 
   pinMode(LED_BOARD, OUTPUT);
 
-  pinMode(JAMM_1500_PIN, OUTPUT);
   pinMode(JAMM_900_PIN, OUTPUT);
+  pinMode(JAMM_1500_PIN, OUTPUT);
   pinMode(JAMM_2400_PIN, OUTPUT);
   pinMode(JAMM_5200_PIN, OUTPUT);
   pinMode(JAMM_5800_PIN, OUTPUT);
@@ -411,14 +427,20 @@ void setup() {
   // pinMode(LED_PWM_PIN, OUTPUT);
   // pinMode(BUZZER_PIN, OUTPUT);
 
+  pinMode(JAMM_900_SENS_PIN, INPUT);
+  pinMode(JAMM_1500_SENS_PIN, INPUT);
+  pinMode(JAMM_2400_SENS_PIN, INPUT);
+  pinMode(JAMM_5200_SENS_PIN, INPUT);
+  pinMode(JAMM_5800_SENS_PIN, INPUT);
+
   digitalWrite(JAMM_1500_PIN, LOW);
   digitalWrite(JAMM_900_PIN, LOW);
   digitalWrite(JAMM_2400_PIN, LOW);
   digitalWrite(JAMM_5200_PIN, LOW);
   digitalWrite(JAMM_5800_PIN, LOW);
   digitalWrite(FAN_PIN, LOW);
-  digitalWrite(LED_BOARD, LOW);
-  // digitalWrite(LED_BOARD, HIGH);
+  // digitalWrite(LED_BOARD, LOW);
+  digitalWrite(LED_BOARD, HIGH);
 
   notifRGB.begin();
   notifRGB.show(); // Initialize all pixels to 'off'
@@ -446,23 +468,37 @@ void setup() {
 void loop() {
   IWatchdog.reload();
 
+  // Check LED pulse timing (runs every loop for precision)
   checkPulse(ledPulse);
 
-  // notifRGB
-  updateNotifAnimation();
+  // Get current time once for all timing checks
+  unsigned long currentTime = millis();
 
-  unsigned long tempTimeNow = millis();
-
-  if (!tempConversionRequested && (tempTimeNow - lastTempReadTime >= TEMP_READ_INTERVAL)) {
-    tempSensor.requestTemperatures();
-    tempConversionRequested = true;
-    tempConversionStartTime = tempTimeNow;
+  // Throttled jammer sensor reading (every 1 second)
+  if ((unsigned long)(currentTime - lastJammerSensorReadTime) >= JAMMER_SENSOR_READ_INTERVAL) {
+    isJammer900On = digitalRead(JAMM_900_SENS_PIN);
+    isJammer1500On = digitalRead(JAMM_1500_SENS_PIN);
+    isJammer2400On = digitalRead(JAMM_2400_SENS_PIN);
+    isJammer5200On = digitalRead(JAMM_5200_SENS_PIN);
+    isJammer5800On = digitalRead(JAMM_5800_SENS_PIN);
+    lastJammerSensorReadTime = currentTime;
   }
 
-  if (tempConversionRequested && (tempTimeNow - tempConversionStartTime >= 750)) {
+  // notifRGB animation update (throttled internally to 20ms)
+  updateNotifAnimation();
+
+  // Overflow-safe interval check for temperature reading (every 10 seconds)
+  if (!tempConversionRequested && ((unsigned long)(currentTime - lastTempReadTime) >= TEMP_READ_INTERVAL)) {
+    tempSensor.requestTemperatures();
+    tempConversionRequested = true;
+    tempConversionStartTime = currentTime;
+  }
+
+  // Overflow-safe check for temperature conversion completion (750ms delay)
+  if (tempConversionRequested && ((unsigned long)(currentTime - tempConversionStartTime) >= 750UL)) {
     cachedTempC0 = tempSensor.getTempCByIndex(0);
     cachedTempC1 = tempSensor.getTempCByIndex(1);
-    lastTempReadTime = tempTimeNow;
+    lastTempReadTime = currentTime;
     tempConversionRequested = false;
   }
 
@@ -475,8 +511,9 @@ void loop() {
     unsigned long timeoutStart = millis();
 
     while (client.connected()) {
-      IWatchdog.reload(); 
-      if (millis() - timeoutStart > 3000) {
+      IWatchdog.reload();
+      // Overflow-safe timeout check (3 second timeout)
+      if ((unsigned long)(millis() - timeoutStart) > 3000UL) {
         break;
       }
 
