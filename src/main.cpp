@@ -42,7 +42,7 @@
 // #define SSR_SPARE  PA6
 
 // STATE Pin
-#define LED_BOARD PC13
+// #define LED_BOARD PC13
 // #define LED1_PIN  PB14
 // #define LED2_PIN  PB15
 #define LED_RGB_PIN PA7
@@ -61,14 +61,6 @@
 // #define SPARE_SENS_PIN      PC15
 
 
-struct TimedPulse {
-  uint8_t pin;
-  unsigned long endTime;
-  bool active;
-};
-
-TimedPulse ledPulse = { LED_BOARD, 0, false };
-
 // Jammer delayed turn-off structure
 struct JammerTimedPulse {
   unsigned long endTime;
@@ -77,17 +69,9 @@ struct JammerTimedPulse {
 
 JammerTimedPulse jammerPulse = { 0, false };
 
-void checkPulse(TimedPulse &p) {
-  // Overflow-safe comparison: checks if current time has passed endTime
-  if (p.active && (millis() - p.endTime) < 0x80000000UL) {
-    digitalWrite(p.pin, LOW);
-    p.active = false;
-  }
-}
-
 void checkJammerPulse(JammerTimedPulse &p) {
   // Overflow-safe comparison: checks if current time has passed endTime
-  if (p.active && (millis() - p.endTime) < 0x80000000UL) {
+  if (p.active && ((long)(millis() - p.endTime) >= 0)) {
     // Turn off all 5 jammer pins
     digitalWrite(JAMM_900_PIN, LOW);
     digitalWrite(JAMM_1500_PIN, LOW);
@@ -201,6 +185,9 @@ void initializeNetwork() {
   digitalWrite(W5500_RST, HIGH);
   delay(300);
   
+  // Reload watchdog during long initialization
+  IWatchdog.reload();
+  
   SPI.setMOSI(W5500_MOSI);
   SPI.setMISO(W5500_MISO);
   SPI.setSCLK(W5500_SCK);
@@ -211,6 +198,7 @@ void initializeNetwork() {
   
   // Give it time to stabilize
   delay(500);
+  IWatchdog.reload();
   
   server.begin();
 
@@ -247,24 +235,6 @@ void sendJSONResponse(EthernetClient& client, int statusCode, const String& json
   client.print(statusCode);
   client.println(" OK\r\nContent-Type: application/json\r\nConnection: close\r\n");
   client.println(jsonMessage);
-}
-
-// --- Route: GET /led (Read current state) ---
-void handleGetLedRoute(EthernetClient& client) {
-  bool currentState = digitalRead(LED_BOARD);
-  // Note: On many STM32 boards like Black Pill, PC13 is active-LOW. 
-  // If your LED turns on when pin is HIGH, keep this as-is.
-  String response = "{\"status\":\"success\",\"led_on\":" + String(currentState ? "true" : "false") + "}";
-  sendJSONResponse(client, 200, response);
-}
-
-// --- Route: POST /led1/pulse (Turn on LED1 for 3 seconds) ---
-void handlePostLed1PulseRoute(EthernetClient& client) {
-  digitalWrite(ledPulse.pin, HIGH);
-  // Overflow-safe: endTime will wrap correctly with unsigned arithmetic
-  ledPulse.endTime = millis() + 3000UL;
-  ledPulse.active = true;
-  sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"LED1 pulse started for 3 seconds\"}");
 }
 
 // --- Route: POST /jammer/pulse (Turn on selected jammers, turn off all after 20 seconds) ---
@@ -538,16 +508,36 @@ void handleOtaRoute(EthernetClient& client, long expectedSize) {
   if (InternalStorage.open(expectedSize)) {
     uint8_t buffer[512];
     long totalReceived = 0;
+    unsigned long otaTimeout = millis();
+    const unsigned long OTA_TIMEOUT = 60000UL; // 60 second timeout for OTA
 
     while (client.connected() || client.available()) {
       IWatchdog.reload();
+      
+      // Timeout protection for OTA process
+      if ((unsigned long)(millis() - otaTimeout) > OTA_TIMEOUT) {
+        DEBUG_PRINTLN("[OTA] Timeout during transfer");
+        InternalStorage.close();
+        sendJSONResponse(client, 408, "{\"status\":\"error\",\"message\":\"OTA timeout\"}");
+        client.stop();
+        return;
+      }
+      
       if (client.available()) {
         int len = client.read(buffer, sizeof(buffer));
         if (len > 0) {
           for (int j = 0; j < len; j++) {
             InternalStorage.write(buffer[j]);
             totalReceived++;
+            if (totalReceived > expectedSize) {
+              DEBUG_PRINTLN("[OTA] Received more data than expected");
+              InternalStorage.close();
+              sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Size mismatch\"}");
+              client.stop();
+              return;
+            }
           }
+          otaTimeout = millis(); // Reset timeout on data received
         }
       }
       if (totalReceived >= expectedSize) {
@@ -565,13 +555,18 @@ void handleOtaRoute(EthernetClient& client, long expectedSize) {
       client.stop();
       delay(500);
       InternalStorage.apply();
+      // Should not reach here, but just in case
+      NVIC_SystemReset();
     } else {
       DEBUG_PRINTLN("[OTA] Critical Fail: Packet sizes do not match header metadata.");
+      sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Size mismatch\"}");
     }
+  } else {
+    DEBUG_PRINTLN("[OTA] Failed to open internal storage");
+    sendJSONResponse(client, 500, "{\"status\":\"error\",\"message\":\"Storage init failed\"}");
   }
   
   client.stop();
-  NVIC_SystemReset();
 }
 
 void setup() {
@@ -583,7 +578,7 @@ void setup() {
   DEBUG_PRINTLN(tempSensor.getDeviceCount());
 
 
-  pinMode(LED_BOARD, OUTPUT);
+  // pinMode(LED_BOARD, OUTPUT);
 
   pinMode(JAMM_900_PIN, OUTPUT);
   pinMode(JAMM_1500_PIN, OUTPUT);
@@ -593,7 +588,7 @@ void setup() {
 
   pinMode(FAN_PIN, OUTPUT);
 
-  pinMode(LED_BOARD, OUTPUT);
+  // pinMode(LED_BOARD, OUTPUT);
   // pinMode(LED_PWM_PIN, OUTPUT);
   // pinMode(BUZZER_PIN, OUTPUT);
 
@@ -609,8 +604,8 @@ void setup() {
   digitalWrite(JAMM_5200_PIN, LOW);
   digitalWrite(JAMM_5800_PIN, LOW);
   digitalWrite(FAN_PIN, LOW);
-  // digitalWrite(LED_BOARD, LOW);
-  digitalWrite(LED_BOARD, HIGH);
+  
+  // digitalWrite(LED_BOARD, HIGH);
 
   notifRGB.begin();
   notifRGB.show(); // Initialize all pixels to 'off'
@@ -621,9 +616,6 @@ void setup() {
 
 void loop() {
   IWatchdog.reload();
-
-  // Check LED pulse timing (runs every loop for precision)
-  checkPulse(ledPulse);
   
   // Check jammer pulse timing (runs every loop for precision)
   checkJammerPulse(jammerPulse);
@@ -672,11 +664,13 @@ void loop() {
     String route = "";
     long contentLength = 0;
     unsigned long timeoutStart = millis();
+    bool headersParsed = false;
 
     while (client.connected()) {
       IWatchdog.reload();
       // Overflow-safe timeout check (3 second timeout)
       if ((unsigned long)(millis() - timeoutStart) > 3000UL) {
+        DEBUG_PRINTLN("[HTTP] Request timeout - closing connection");
         break;
       }
 
@@ -685,7 +679,8 @@ void loop() {
         
         if (c == '\n') {
           if (currentLine.length() == 0) {
-            break; 
+            headersParsed = true;
+            break;
           }
 
           // --- EXTRACT METHOD AND ROUTE ---
@@ -694,13 +689,15 @@ void loop() {
             int firstSpace = currentLine.indexOf(' ');
             int secondSpace = currentLine.indexOf(' ', firstSpace + 1);
             
-            method = currentLine.substring(0, firstSpace);
-            route = currentLine.substring(firstSpace + 1, secondSpace);
+            if (firstSpace > 0 && secondSpace > firstSpace) {
+              method = currentLine.substring(0, firstSpace);
+              route = currentLine.substring(firstSpace + 1, secondSpace);
 
-            DEBUG_PRINT("[HTTP] Intercepted Request: ");
-            DEBUG_PRINT(method);
-            DEBUG_PRINT(" -> ");
-            DEBUG_PRINTLN(route);
+              DEBUG_PRINT("[HTTP] Intercepted Request: ");
+              DEBUG_PRINT(method);
+              DEBUG_PRINT(" -> ");
+              DEBUG_PRINTLN(route);
+            }
           }
 
           String lowercaseLine = currentLine;
@@ -711,32 +708,35 @@ void loop() {
             if (colonIdx > 0) {
               String sizeStr = currentLine.substring(colonIdx + 1);
               sizeStr.trim();
-              contentLength = atol(sizeStr.c_str()); 
+              contentLength = atol(sizeStr.c_str());
             }
           }
 
           currentLine = "";
         } else if (c != '\r') {
-          currentLine += c;
+          // Prevent unbounded String growth - limit header line length
+          if (currentLine.length() < 512) {
+            currentLine += c;
+          } else {
+            DEBUG_PRINTLN("[HTTP] Header line too long - rejecting");
+            sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Header too long\"}");
+            client.stop();
+            return;
+          }
         }
       }
     }
 
+    // Validate that we got valid method and route
+    if (!headersParsed || method.length() == 0 || route.length() == 0) {
+      DEBUG_PRINTLN("[HTTP] Invalid request - missing method or route");
+      client.stop();
+      return;
+    }
+
     // --- STRATEGIC METHOD-BASED ROUTER BLOCK ---
-    if (method == "GET" && route == "/led") {
-      handleGetLedRoute(client);
-    } 
-    else if (method == "POST" && route == "/led1/pulse") {
-      handlePostLed1PulseRoute(client);
-    }
-    else if (method == "POST" && route == "/jammer/pulse") {
-      handlePostJammerPulseRoute(client);
-    }
-    else if (method == "POST" && route == "/jammer") {
-      handlePostJammerRoute(client);
-    }
-    else if (method == "POST" && route == "/jammers") {
-      handlePostJammersRoute(client);
+    if (method == "GET" && route == "/temp") {
+      handleGetTempRoute(client);
     }
     else if (method == "POST" && route == "/fan") {
       handlePostFanRoute(client);
@@ -744,16 +744,23 @@ void loop() {
     else if (method == "POST" && route == "/ota") {
       handleOtaRoute(client, contentLength);
     } 
+    else if (method == "POST" && route == "/jammer") {
+      handlePostJammerRoute(client);
+    }
+    else if (method == "POST" && route == "/jammers") {
+      handlePostJammersRoute(client);
+    }
+    else if (method == "POST" && route == "/jammer/pulse") {
+      handlePostJammerPulseRoute(client);
+    }
     else if (method == "POST" && route == "/notifRGB") {
       handleNotifRGBControl(client);
 
     }
-    // notifRGB
     else if (method == "POST" && route == "/animateRGB") {
       handleAnimateRGBControl(client);
 
     }
-    // Jammer state route
     else if (method == "GET" && route == "/jamm_state") {
       isJammer900On = (digitalRead(JAMM_900_SENS_PIN) == LOW);
       isJammer1500On = (digitalRead(JAMM_1500_SENS_PIN) == LOW);
@@ -763,11 +770,6 @@ void loop() {
       lastJammerSensorReadTime = currentTime;
 
       handleGetJammStateRoute(client);
-    }
-
-    // Temp route
-    else if (method == "GET" && route == "/temp") {
-      handleGetTempRoute(client);
     }
 
     else {
