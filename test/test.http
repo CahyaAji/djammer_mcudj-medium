@@ -1,11 +1,3 @@
-#### Coba
-GET http://192.168.10.11/led
-Content-Type: application/json
-
-{
-    "status": true
-}
-
 #### Test Jammer On
 POST http://192.168.10.11/jammer
 Content-Type: application/json
