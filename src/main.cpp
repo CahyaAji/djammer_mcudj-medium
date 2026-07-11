@@ -16,29 +16,29 @@
 
 // Debug print macros - automatically disabled when DEBUG_ENABLED is false
 #if DEBUG_ENABLED
-  #define DEBUG_PRINT(x)    Serial.print(x)
-  #define DEBUG_PRINTLN(x)  Serial.println(x)
+#define DEBUG_PRINT(x) Serial.print(x)
+#define DEBUG_PRINTLN(x) Serial.println(x)
 #else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTLN(x)
+#define DEBUG_PRINT(x)
+#define DEBUG_PRINTLN(x)
 #endif
 
 // W5500 Hardware Pins
-#define W5500_SCK   PB3
-#define W5500_MISO  PB4
-#define W5500_MOSI  PB5
-#define W5500_CS    PA15
-#define W5500_RST   PB8
+#define W5500_SCK PB3
+#define W5500_MISO PB4
+#define W5500_MOSI PB5
+#define W5500_CS PA15
+#define W5500_RST PB8
 
 // JAMM Pin
-#define JAMM_900_PIN   PA3
-#define JAMM_1500_PIN  PA5
-#define JAMM_2400_PIN  PA2
-#define JAMM_5200_PIN  PA1
-#define JAMM_5800_PIN  PA0
+#define JAMM_900_PIN PA3
+#define JAMM_1500_PIN PA5
+#define JAMM_2400_PIN PA2
+#define JAMM_5200_PIN PA1
+#define JAMM_5800_PIN PA0
 
 // FAN Pin
-#define FAN_PIN    PA4
+#define FAN_PIN PA4
 // #define SSR_SPARE  PA6
 
 // STATE Pin
@@ -46,6 +46,7 @@
 // #define LED1_PIN  PB14
 // #define LED2_PIN  PB15
 #define LED_RGB_PIN PA7
+// RGB values, RED = disconnected, BLUE = connected/Standby, YELLOW = Jamming
 #define LED_RGB_NUM_PIXELS 7
 // #define BUZZER_PIN  PA8
 
@@ -53,25 +54,27 @@
 // #define TEMP_SENSOR_1_PIN PB1
 
 // Jammer Output State Sensor Pins
-#define JAMM_900_SENS_PIN   PB9
-#define JAMM_1500_SENS_PIN  PC14
-#define JAMM_2400_SENS_PIN  PB7
-#define JAMM_5200_SENS_PIN  PB6
-#define JAMM_5800_SENS_PIN  PC13
+#define JAMM_900_SENS_PIN PB9
+#define JAMM_1500_SENS_PIN PC14
+#define JAMM_2400_SENS_PIN PB7
+#define JAMM_5200_SENS_PIN PB6
+#define JAMM_5800_SENS_PIN PC13
 // #define SPARE_SENS_PIN      PC15
 
-
 // Jammer delayed turn-off structure
-struct JammerTimedPulse {
+struct JammerTimedPulse
+{
   unsigned long endTime;
   bool active;
 };
 
-JammerTimedPulse jammerPulse = { 0, false };
+JammerTimedPulse jammerPulse = {0, false};
 
-void checkJammerPulse(JammerTimedPulse &p) {
+void checkJammerPulse(JammerTimedPulse &p)
+{
   // Overflow-safe comparison: checks if current time has passed endTime
-  if (p.active && ((long)(millis() - p.endTime) >= 0)) {
+  if (p.active && ((long)(millis() - p.endTime) >= 0))
+  {
     // Turn off all 5 jammer pins
     digitalWrite(JAMM_900_PIN, LOW);
     digitalWrite(JAMM_1500_PIN, LOW);
@@ -94,7 +97,7 @@ DallasTemperature tempSensor(&oneWire);
 
 // Network configuration
 // Mark change IP for different devices
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x51 };
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x51};
 IPAddress ip(192, 168, 10, 11);
 IPAddress gateway(192, 168, 10, 1);
 IPAddress subnet(255, 255, 255, 0);
@@ -115,9 +118,9 @@ const unsigned long JAMMER_SENSOR_READ_INTERVAL = 2000UL; // in milliseconds
 
 // Network health monitoring
 unsigned long lastNetworkCheckTime = 0;
-const unsigned long NETWORK_CHECK_INTERVAL = 30000UL; // Check every 30 seconds
+const unsigned long NETWORK_CHECK_INTERVAL = 5000UL; // Check every 5 seconds
 uint8_t networkFailureCount = 0;
-const uint8_t MAX_NETWORK_FAILURES = 3; // Reinit after 3 consecutive failures
+const uint8_t MAX_NETWORK_FAILURES = 24; // Reinit after 24 x 5s = 2 minutes of failures
 
 float cachedTempC0 = -127.0f;
 float cachedTempC1 = -127.0f;
@@ -132,62 +135,71 @@ bool manualOverride = false;
 unsigned long lastAnimationUpdate = 0;
 const unsigned long animationInterval = 20UL; // 50 FPS (20ms per frame)
 // notifRGB
-uint8_t notifRotationOffset = 0;    // Current rotating dot position (0 to LED_RGB_NUM_PIXELS-1)
-uint8_t rotationFrameSkip = 0;      // Frame counter to slow down rotation
-
+uint8_t notifRotationOffset = 0; // Current rotating dot position (0 to LED_RGB_NUM_PIXELS-1)
+uint8_t rotationFrameSkip = 0;   // Frame counter to slow down rotation
 
 // notifRGB
-void updateNotifAnimation() {
-    unsigned long now = millis();
-    // Overflow-safe interval check
-    if ((unsigned long)(now - lastAnimationUpdate) < animationInterval) return;
-    lastAnimationUpdate = now;
-    if (!animationRunning) return;
+void updateNotifAnimation()
+{
+  unsigned long now = millis();
+  // Overflow-safe interval check
+  if ((unsigned long)(now - lastAnimationUpdate) < animationInterval)
+    return;
+  lastAnimationUpdate = now;
+  if (!animationRunning)
+    return;
 
-    // Advance the rotating dot position every ~15 frames (300ms) for slower rotation
-    // Full rotation of 6 ring pixels takes ~1.8 seconds
-    rotationFrameSkip++;
-    if (rotationFrameSkip >= 15) {
-        rotationFrameSkip = 0;
-        // Rotate only on the ring (indices 0-5), skip center (index 6)
-        // Decrement for clockwise rotation
-        notifRotationOffset = (notifRotationOffset - 1 + (LED_RGB_NUM_PIXELS - 1)) % (LED_RGB_NUM_PIXELS - 1);
-    }
+  // Advance the rotating dot position every ~15 frames (300ms) for slower rotation
+  // Full rotation of 6 ring pixels takes ~1.8 seconds
+  rotationFrameSkip++;
+  if (rotationFrameSkip >= 15)
+  {
+    rotationFrameSkip = 0;
+    // Rotate only on the ring (indices 0-5), skip center (index 6)
+    // Decrement for clockwise rotation
+    notifRotationOffset = (notifRotationOffset - 1 + (LED_RGB_NUM_PIXELS - 1)) % (LED_RGB_NUM_PIXELS - 1);
+  }
 
-    for (int i = 0; i < LED_RGB_NUM_PIXELS; i++) {
-        if (i == 6) {
-            // Center LED: steady red
-            notifRGB.setPixelColor(i, notifRGB.Color(5, 5, 0));
-        } else if (i == notifRotationOffset) {
-            // Rotating blue dot on the ring
-            notifRGB.setPixelColor(i, notifRGB.Color(0, 0, 255));
-        } 
-        // else if (i == (notifRotationOffset + 2) % (LED_RGB_NUM_PIXELS - 1)) {
-        //     // Rotating red dot on the ring
-        //     notifRGB.setPixelColor(i, notifRGB.Color(255, 0, 0));
-        // } 
-        else {
-            // Ring background: off
-            notifRGB.setPixelColor(i, notifRGB.Color(5, 5, 0));
-        }
+  for (int i = 0; i < LED_RGB_NUM_PIXELS; i++)
+  {
+    if (i == 6)
+    {
+      // Center LED: steady red
+      notifRGB.setPixelColor(i, notifRGB.Color(5, 5, 0));
     }
-    notifRGB.show();
+    else if (i == notifRotationOffset)
+    {
+      // Rotating blue dot on the ring
+      notifRGB.setPixelColor(i, notifRGB.Color(0, 0, 255));
+    }
+    // else if (i == (notifRotationOffset + 2) % (LED_RGB_NUM_PIXELS - 1)) {
+    //     // Rotating red dot on the ring
+    //     notifRGB.setPixelColor(i, notifRGB.Color(255, 0, 0));
+    // }
+    else
+    {
+      // Ring background: off
+      notifRGB.setPixelColor(i, notifRGB.Color(5, 5, 0));
+    }
+  }
+  notifRGB.show();
 }
 
 // Network initialization and recovery function
-void initializeNetwork() {
+void initializeNetwork()
+{
   DEBUG_PRINTLN("[NET] Initializing network...");
-  
+
   // Hard Reset W5500
   pinMode(W5500_RST, OUTPUT);
   digitalWrite(W5500_RST, LOW);
   delay(100);
   digitalWrite(W5500_RST, HIGH);
   delay(300);
-  
+
   // Reload watchdog during long initialization
   IWatchdog.reload();
-  
+
   SPI.setMOSI(W5500_MOSI);
   SPI.setMISO(W5500_MISO);
   SPI.setSCLK(W5500_SCK);
@@ -195,11 +207,11 @@ void initializeNetwork() {
 
   Ethernet.init(W5500_CS);
   Ethernet.begin(mac, ip, myDns, gateway, subnet);
-  
+
   // Give it time to stabilize
   delay(500);
   IWatchdog.reload();
-  
+
   server.begin();
 
   DEBUG_PRINT("[NET] Server listening on: http://");
@@ -207,30 +219,49 @@ void initializeNetwork() {
 }
 
 // Check network health and recover if needed
-void checkNetworkHealth() {
+void checkNetworkHealth()
+{
   // Check link status using W5500 hardware
   uint8_t linkStatus = Ethernet.linkStatus();
-  
-  if (linkStatus == LinkOFF) {
+
+  if (linkStatus == LinkOFF)
+  {
     networkFailureCount++;
     DEBUG_PRINT("[NET] Link DOWN detected. Failure count: ");
     DEBUG_PRINTLN(networkFailureCount);
-    
-    if (networkFailureCount >= MAX_NETWORK_FAILURES) {
+
+    for (int i = 0; i < LED_RGB_NUM_PIXELS; i++)
+    {
+      notifRGB.setPixelColor(i, notifRGB.Color(200, 0, 0));
+    }
+    notifRGB.show();
+
+    if (networkFailureCount >= MAX_NETWORK_FAILURES)
+    {
       DEBUG_PRINTLN("[NET] Max failures reached. Reinitializing network...");
       initializeNetwork();
       networkFailureCount = 0;
     }
-  } else if (linkStatus == LinkON) {
+  }
+  else if (linkStatus == LinkON)
+  {
     // Link is good, reset failure counter
-    if (networkFailureCount > 0) {
+    if (networkFailureCount > 0)
+    {
       DEBUG_PRINTLN("[NET] Link restored.");
       networkFailureCount = 0;
     }
+
+    for (int i = 0; i < LED_RGB_NUM_PIXELS; i++)
+    {
+      notifRGB.setPixelColor(i, notifRGB.Color(0, 0, 200));
+    }
+    notifRGB.show();
   }
 }
 
-void sendJSONResponse(EthernetClient& client, int statusCode, const String& jsonMessage) {
+void sendJSONResponse(EthernetClient &client, int statusCode, const String &jsonMessage)
+{
   client.print("HTTP/1.1 ");
   client.print(statusCode);
   client.println(" OK\r\nContent-Type: application/json\r\nConnection: close\r\n");
@@ -238,17 +269,20 @@ void sendJSONResponse(EthernetClient& client, int statusCode, const String& json
 }
 
 // --- Route: POST /jammer/pulse (Turn on selected jammers, turn off all after 20 seconds) ---
-void handlePostJammerPulseRoute(EthernetClient& client) {
+void handlePostJammerPulseRoute(EthernetClient &client)
+{
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, client);
 
-  if (error) {
+  if (error)
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
     return;
   }
 
   // Validate that required keys exist
-  if (!doc["jamm_900"].is<bool>() || !doc["jamm_1500"].is<bool>() || !doc["jamm_2400"].is<bool>() || !doc["jamm_5200"].is<bool>() || !doc["jamm_5800"].is<bool>()) {
+  if (!doc["jamm_900"].is<bool>() || !doc["jamm_1500"].is<bool>() || !doc["jamm_2400"].is<bool>() || !doc["jamm_5200"].is<bool>() || !doc["jamm_5800"].is<bool>())
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys: jamm_900, jamm_1500, jamm_2400, jamm_5200, jamm_5800 (boolean required)\"}");
     return;
   }
@@ -276,8 +310,9 @@ void handlePostJammerPulseRoute(EthernetClient& client) {
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Jammers updated, auto turn-off in 20 seconds (timer reset)\"}");
 }
 
-void handleGetTempRoute(EthernetClient& client) {
-  JsonDocument doc; 
+void handleGetTempRoute(EthernetClient &client)
+{
+  JsonDocument doc;
 
   doc["status"] = "success";
   doc["temp_0_c"] = cachedTempC0;
@@ -288,8 +323,9 @@ void handleGetTempRoute(EthernetClient& client) {
   sendJSONResponse(client, 200, jsonResponse);
 }
 
-void handleGetJammStateRoute(EthernetClient& client) {
-  JsonDocument doc; 
+void handleGetJammStateRoute(EthernetClient &client)
+{
+  JsonDocument doc;
 
   doc["status"] = "success";
   doc["jamm_900"] = isJammer900On;
@@ -303,102 +339,117 @@ void handleGetJammStateRoute(EthernetClient& client) {
   sendJSONResponse(client, 200, jsonResponse);
 }
 
-void handleNotifRGBControl(EthernetClient& client) {
-  JsonDocument doc; 
+void handleNotifRGBControl(EthernetClient &client)
+{
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, client);
 
-  if (error) {
+  if (error)
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
     return;
   }
 
-  if (!doc["is_on"].is<bool>() || !doc["r"].is<int>() || !doc["g"].is<int>() || !doc["b"].is<int>() || !doc["numb"].is<byte>()) {
+  if (!doc["is_on"].is<bool>() || !doc["r"].is<int>() || !doc["g"].is<int>() || !doc["b"].is<int>() || !doc["numb"].is<byte>())
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys (is_on, r, g, b, numb required)\"}");
     return;
   }
 
-    DEBUG_PRINTLN("[HTTP] Received /notifRGB request");
+  DEBUG_PRINTLN("[HTTP] Received /notifRGB request");
 
-    bool isOn = doc["is_on"];
-    int r = doc["r"];
-    int g = doc["g"];
-    int b = doc["b"];
-    byte numb = doc["numb"];
+  bool isOn = doc["is_on"];
+  int r = doc["r"];
+  int g = doc["g"];
+  int b = doc["b"];
+  byte numb = doc["numb"];
 
-    // Boundary check for RGB ranges
-    if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255 || numb >= LED_RGB_NUM_PIXELS) {
-        sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"RGB values must be 0-255 and pixel index must be valid\"}");
-        return;
-    }
+  // Boundary check for RGB ranges
+  if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255 || numb >= LED_RGB_NUM_PIXELS)
+  {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"RGB values must be 0-255 and pixel index must be valid\"}");
+    return;
+  }
 
-    if(isOn == false) {
-      notifRGB.clear();
-    } else {
-      notifRGB.setPixelColor(numb, notifRGB.Color(r, g, b));
-    }
+  if (isOn == false)
+  {
+    notifRGB.clear();
+  }
+  else
+  {
+    notifRGB.setPixelColor(numb, notifRGB.Color(r, g, b));
+  }
 
-    notifRGB.show();
+  notifRGB.show();
 
-    JsonDocument responseDoc;
-    responseDoc["success"] = true;
-    responseDoc["is_on"] = isOn ? "ON" : "OFF";
-    responseDoc["color"] = String(r) + "," + String(g) + "," + String(b);
-    responseDoc["pixel"] = numb;
+  JsonDocument responseDoc;
+  responseDoc["success"] = true;
+  responseDoc["is_on"] = isOn ? "ON" : "OFF";
+  responseDoc["color"] = String(r) + "," + String(g) + "," + String(b);
+  responseDoc["pixel"] = numb;
 
-    String jsonResponse;
-    serializeJson(responseDoc, jsonResponse);
-    sendJSONResponse(client, 200, jsonResponse);
-
+  String jsonResponse;
+  serializeJson(responseDoc, jsonResponse);
+  sendJSONResponse(client, 200, jsonResponse);
 }
 
 // notifRGB
-void handleAnimateRGBControl(EthernetClient& client) {
+void handleAnimateRGBControl(EthernetClient &client)
+{
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, client);
 
-  if (error) {
+  if (error)
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
     return;
   }
 
-  if (!doc["is_on"].is<bool>()) {
+  if (!doc["is_on"].is<bool>())
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid key: is_on (boolean required)\"}");
     return;
   }
 
-    DEBUG_PRINTLN("[HTTP] Received /animateRGB request");
+  DEBUG_PRINTLN("[HTTP] Received /animateRGB request");
 
-    bool isOn = doc["is_on"];
+  bool isOn = doc["is_on"];
 
-    if(isOn == false) {
-      animationRunning = false;
-      notifRGB.clear();
-      notifRGB.show();
-    } else {
-      animationRunning = true;
-    }
+  if (isOn == false)
+  {
+    animationRunning = false;
+    notifRGB.clear();
+    notifRGB.show();
+  }
+  else
+  {
+    animationRunning = true;
+  }
 
-    JsonDocument responseDoc;
-    responseDoc["success"] = true;
-    responseDoc["is_on"] = isOn ? "ON" : "OFF";
-    responseDoc["message"] = isOn ? "Animation started" : "Animation stopped";
+  JsonDocument responseDoc;
+  responseDoc["success"] = true;
+  responseDoc["is_on"] = isOn ? "ON" : "OFF";
+  responseDoc["message"] = isOn ? "Animation started" : "Animation stopped";
 
-    String jsonResponse;
-    serializeJson(responseDoc, jsonResponse);
-    sendJSONResponse(client, 200, jsonResponse);
+  String jsonResponse;
+  serializeJson(responseDoc, jsonResponse);
+  sendJSONResponse(client, 200, jsonResponse);
 }
 
-void handlePostFanRoute(EthernetClient& client) {
-  JsonDocument doc; 
+void handlePostFanRoute(EthernetClient &client)
+{
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, client);
 
-  if (error) {
+  if (error)
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
     return;
   }
 
   // Validate that required keys
-  if (!doc["is_on"].is<bool>()) {
+  if (!doc["is_on"].is<bool>())
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid key: fan (boolean required)\"}");
     return;
   }
@@ -408,20 +459,22 @@ void handlePostFanRoute(EthernetClient& client) {
   bool isOn = doc["is_on"];
   digitalWrite(FAN_PIN, isOn);
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Fan state updated\"}");
-
 }
 
-void handlePostJammersRoute(EthernetClient& client) {
-  JsonDocument doc; 
+void handlePostJammersRoute(EthernetClient &client)
+{
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, client);
 
-  if (error) {
+  if (error)
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
     return;
   }
 
   // Validate that required keys
-  if (!doc["jamm_900"].is<bool>() || !doc["jamm_1500"].is<bool>() || !doc["jamm_2400"].is<bool>() || !doc["jamm_5200"].is<bool>() || !doc["jamm_5800"].is<bool>()) {
+  if (!doc["jamm_900"].is<bool>() || !doc["jamm_1500"].is<bool>() || !doc["jamm_2400"].is<bool>() || !doc["jamm_5200"].is<bool>() || !doc["jamm_5800"].is<bool>())
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys: jamm_900, jamm_1500, jamm_2400, jamm_5200, jamm_5800 (boolean required)\"}");
     return;
   }
@@ -444,17 +497,20 @@ void handlePostJammersRoute(EthernetClient& client) {
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Jammers state updated\"}");
 }
 
-void handlePostJammerRoute(EthernetClient& client) {
-  JsonDocument doc; 
+void handlePostJammerRoute(EthernetClient &client)
+{
+  JsonDocument doc;
   DeserializationError error = deserializeJson(doc, client);
 
-  if (error) {
+  if (error)
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
     return;
   }
 
   // Validate that required keys
-  if (!doc["jamm_freq"].is<int>() || !doc["is_on"].is<bool>()) {
+  if (!doc["jamm_freq"].is<int>() || !doc["is_on"].is<bool>())
+  {
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing a key\"}");
     return;
   }
@@ -465,38 +521,41 @@ void handlePostJammerRoute(EthernetClient& client) {
   int jammerFreq = doc["jamm_freq"];
   bool isOn = doc["is_on"];
 
-  switch (jammerFreq) {
-    case 900:
-        digitalWrite(JAMM_900_PIN, isOn);
-        break;
-    case 1500:
-        digitalWrite(JAMM_1500_PIN, isOn);
-        break;
-    case 2400:
-        digitalWrite(JAMM_2400_PIN, isOn);
-        break;
-    case 5200:
-        digitalWrite(JAMM_5200_PIN, isOn);
-        break;
-    case 5800:
-        digitalWrite(JAMM_5800_PIN, isOn);
-        break;
-    default:
-        sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid 'jamm' frequency\"}");
-        return;
-    }
+  switch (jammerFreq)
+  {
+  case 900:
+    digitalWrite(JAMM_900_PIN, isOn);
+    break;
+  case 1500:
+    digitalWrite(JAMM_1500_PIN, isOn);
+    break;
+  case 2400:
+    digitalWrite(JAMM_2400_PIN, isOn);
+    break;
+  case 5200:
+    digitalWrite(JAMM_5200_PIN, isOn);
+    break;
+  case 5800:
+    digitalWrite(JAMM_5800_PIN, isOn);
+    break;
+  default:
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid 'jamm' frequency\"}");
+    return;
+  }
 
-    DEBUG_PRINT("[HTTP] Jammer frequency ");
-    DEBUG_PRINT(jammerFreq);
-    DEBUG_PRINT(" is now ");
-    DEBUG_PRINTLN(isOn ? "ON" : "OFF");
-    String response = "{\"success\": true,\"message\":\"Jammer frequency " + String(jammerFreq) + " is now " + (isOn ? "ON" : "OFF") + "\"}";
-    sendJSONResponse(client, 200, response);
+  DEBUG_PRINT("[HTTP] Jammer frequency ");
+  DEBUG_PRINT(jammerFreq);
+  DEBUG_PRINT(" is now ");
+  DEBUG_PRINTLN(isOn ? "ON" : "OFF");
+  String response = "{\"success\": true,\"message\":\"Jammer frequency " + String(jammerFreq) + " is now " + (isOn ? "ON" : "OFF") + "\"}";
+  sendJSONResponse(client, 200, response);
 }
 
 // --- Route: POST /ota ---
-void handleOtaRoute(EthernetClient& client, long expectedSize) {
-  if (expectedSize <= 0 || expectedSize > 256000) {
+void handleOtaRoute(EthernetClient &client, long expectedSize)
+{
+  if (expectedSize <= 0 || expectedSize > 256000)
+  {
     sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Invalid size constraints\"}");
     return;
   }
@@ -505,31 +564,38 @@ void handleOtaRoute(EthernetClient& client, long expectedSize) {
   DEBUG_PRINT(expectedSize);
   DEBUG_PRINTLN(" bytes.");
 
-  if (InternalStorage.open(expectedSize)) {
+  if (InternalStorage.open(expectedSize))
+  {
     uint8_t buffer[512];
     long totalReceived = 0;
     unsigned long otaTimeout = millis();
     const unsigned long OTA_TIMEOUT = 60000UL; // 60 second timeout for OTA
 
-    while (client.connected() || client.available()) {
+    while (client.connected() || client.available())
+    {
       IWatchdog.reload();
-      
+
       // Timeout protection for OTA process
-      if ((unsigned long)(millis() - otaTimeout) > OTA_TIMEOUT) {
+      if ((unsigned long)(millis() - otaTimeout) > OTA_TIMEOUT)
+      {
         DEBUG_PRINTLN("[OTA] Timeout during transfer");
         InternalStorage.close();
         sendJSONResponse(client, 408, "{\"status\":\"error\",\"message\":\"OTA timeout\"}");
         client.stop();
         return;
       }
-      
-      if (client.available()) {
+
+      if (client.available())
+      {
         int len = client.read(buffer, sizeof(buffer));
-        if (len > 0) {
-          for (int j = 0; j < len; j++) {
+        if (len > 0)
+        {
+          for (int j = 0; j < len; j++)
+          {
             InternalStorage.write(buffer[j]);
             totalReceived++;
-            if (totalReceived > expectedSize) {
+            if (totalReceived > expectedSize)
+            {
               DEBUG_PRINTLN("[OTA] Received more data than expected");
               InternalStorage.close();
               sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Size mismatch\"}");
@@ -540,7 +606,8 @@ void handleOtaRoute(EthernetClient& client, long expectedSize) {
           otaTimeout = millis(); // Reset timeout on data received
         }
       }
-      if (totalReceived >= expectedSize) {
+      if (totalReceived >= expectedSize)
+      {
         break;
       }
     }
@@ -549,7 +616,8 @@ void handleOtaRoute(EthernetClient& client, long expectedSize) {
     DEBUG_PRINT("[OTA] Extraction finished. Received count: ");
     DEBUG_PRINTLN(totalReceived);
 
-    if (totalReceived == expectedSize) {
+    if (totalReceived == expectedSize)
+    {
       DEBUG_PRINTLN("[OTA] Verification Success! Performing system remap...");
       sendJSONResponse(client, 200, "{\"status\":\"success\",\"message\":\"Flashing complete. Rebooting.\"}");
       client.stop();
@@ -557,26 +625,30 @@ void handleOtaRoute(EthernetClient& client, long expectedSize) {
       InternalStorage.apply();
       // Should not reach here, but just in case
       NVIC_SystemReset();
-    } else {
+    }
+    else
+    {
       DEBUG_PRINTLN("[OTA] Critical Fail: Packet sizes do not match header metadata.");
       sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Size mismatch\"}");
     }
-  } else {
+  }
+  else
+  {
     DEBUG_PRINTLN("[OTA] Failed to open internal storage");
     sendJSONResponse(client, 500, "{\"status\":\"error\",\"message\":\"Storage init failed\"}");
   }
-  
+
   client.stop();
 }
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
-  IWatchdog.begin(20000000); 
+  IWatchdog.begin(20000000);
 
   tempSensor.begin(); // Initialize the DallasTemperature library
   DEBUG_PRINT("[TEMP] Sensors found: ");
   DEBUG_PRINTLN(tempSensor.getDeviceCount());
-
 
   // pinMode(LED_BOARD, OUTPUT);
 
@@ -604,19 +676,25 @@ void setup() {
   digitalWrite(JAMM_5200_PIN, LOW);
   digitalWrite(JAMM_5800_PIN, LOW);
   digitalWrite(FAN_PIN, LOW);
-  
+
   // digitalWrite(LED_BOARD, HIGH);
 
   notifRGB.begin();
-  notifRGB.show(); // Initialize all pixels to 'off'
+
+  for (int i = 0; i < LED_RGB_NUM_PIXELS; i++)
+  {
+    notifRGB.setPixelColor(i, notifRGB.Color(200, 0, 0)); // Set all pixels to 'off'
+  }
+  notifRGB.show();
 
   // Initialize network with recovery capability
   initializeNetwork();
 }
 
-void loop() {
+void loop()
+{
   IWatchdog.reload();
-  
+
   // Check jammer pulse timing (runs every loop for precision)
   checkJammerPulse(jammerPulse);
 
@@ -624,7 +702,8 @@ void loop() {
   unsigned long currentTime = millis();
 
   // Throttled jammer sensor reading (every 1 second)
-  if ((unsigned long)(currentTime - lastJammerSensorReadTime) >= JAMMER_SENSOR_READ_INTERVAL) {
+  if ((unsigned long)(currentTime - lastJammerSensorReadTime) >= JAMMER_SENSOR_READ_INTERVAL)
+  {
     isJammer900On = (digitalRead(JAMM_900_SENS_PIN) == LOW);
     isJammer1500On = (digitalRead(JAMM_1500_SENS_PIN) == LOW);
     isJammer2400On = (digitalRead(JAMM_2400_SENS_PIN) == LOW);
@@ -637,20 +716,23 @@ void loop() {
   updateNotifAnimation();
 
   // Network health check (every 30 seconds)
-  if ((unsigned long)(currentTime - lastNetworkCheckTime) >= NETWORK_CHECK_INTERVAL) {
+  if ((unsigned long)(currentTime - lastNetworkCheckTime) >= NETWORK_CHECK_INTERVAL)
+  {
     checkNetworkHealth();
     lastNetworkCheckTime = currentTime;
   }
 
   // Overflow-safe interval check for temperature reading (every 10 seconds)
-  if (!tempConversionRequested && ((unsigned long)(currentTime - lastTempReadTime) >= TEMP_READ_INTERVAL)) {
+  if (!tempConversionRequested && ((unsigned long)(currentTime - lastTempReadTime) >= TEMP_READ_INTERVAL))
+  {
     tempSensor.requestTemperatures();
     tempConversionRequested = true;
     tempConversionStartTime = currentTime;
   }
 
   // Overflow-safe check for temperature conversion completion (750ms delay)
-  if (tempConversionRequested && ((unsigned long)(currentTime - tempConversionStartTime) >= 750UL)) {
+  if (tempConversionRequested && ((unsigned long)(currentTime - tempConversionStartTime) >= 750UL))
+  {
     cachedTempC0 = tempSensor.getTempCByIndex(0);
     cachedTempC1 = tempSensor.getTempCByIndex(1);
     lastTempReadTime = currentTime;
@@ -658,38 +740,46 @@ void loop() {
   }
 
   EthernetClient client = server.available();
-  if (client) {
+  if (client)
+  {
     String currentLine = "";
-    String method = "";  // Added variable to catch GET/POST
+    String method = ""; // Added variable to catch GET/POST
     String route = "";
     long contentLength = 0;
     unsigned long timeoutStart = millis();
     bool headersParsed = false;
 
-    while (client.connected()) {
+    while (client.connected())
+    {
       IWatchdog.reload();
       // Overflow-safe timeout check (3 second timeout)
-      if ((unsigned long)(millis() - timeoutStart) > 3000UL) {
+      if ((unsigned long)(millis() - timeoutStart) > 3000UL)
+      {
         DEBUG_PRINTLN("[HTTP] Request timeout - closing connection");
         break;
       }
 
-      if (client.available()) {
+      if (client.available())
+      {
         char c = client.read();
-        
-        if (c == '\n') {
-          if (currentLine.length() == 0) {
+
+        if (c == '\n')
+        {
+          if (currentLine.length() == 0)
+          {
             headersParsed = true;
             break;
           }
 
           // --- EXTRACT METHOD AND ROUTE ---
           // Example first line: "POST /led HTTP/1.1"
-          if (currentLine.startsWith("POST ") || currentLine.startsWith("GET ")) {
+          if (currentLine.startsWith("POST ") || currentLine.startsWith("GET "))
+          {
             int firstSpace = currentLine.indexOf(' ');
             int secondSpace = currentLine.indexOf(' ', firstSpace + 1);
-            
-            if (firstSpace > 0 && secondSpace > firstSpace) {
+
+            if (firstSpace > 0 && secondSpace > firstSpace)
+            {
               method = currentLine.substring(0, firstSpace);
               route = currentLine.substring(firstSpace + 1, secondSpace);
 
@@ -703,9 +793,11 @@ void loop() {
           String lowercaseLine = currentLine;
           lowercaseLine.toLowerCase();
 
-          if (lowercaseLine.startsWith("content-length:")) {
+          if (lowercaseLine.startsWith("content-length:"))
+          {
             int colonIdx = currentLine.indexOf(':');
-            if (colonIdx > 0) {
+            if (colonIdx > 0)
+            {
               String sizeStr = currentLine.substring(colonIdx + 1);
               sizeStr.trim();
               contentLength = atol(sizeStr.c_str());
@@ -713,11 +805,16 @@ void loop() {
           }
 
           currentLine = "";
-        } else if (c != '\r') {
+        }
+        else if (c != '\r')
+        {
           // Prevent unbounded String growth - limit header line length
-          if (currentLine.length() < 512) {
+          if (currentLine.length() < 512)
+          {
             currentLine += c;
-          } else {
+          }
+          else
+          {
             DEBUG_PRINTLN("[HTTP] Header line too long - rejecting");
             sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Header too long\"}");
             client.stop();
@@ -728,40 +825,48 @@ void loop() {
     }
 
     // Validate that we got valid method and route
-    if (!headersParsed || method.length() == 0 || route.length() == 0) {
+    if (!headersParsed || method.length() == 0 || route.length() == 0)
+    {
       DEBUG_PRINTLN("[HTTP] Invalid request - missing method or route");
       client.stop();
       return;
     }
 
     // --- STRATEGIC METHOD-BASED ROUTER BLOCK ---
-    if (method == "GET" && route == "/temp") {
+    if (method == "GET" && route == "/temp")
+    {
       handleGetTempRoute(client);
     }
-    else if (method == "POST" && route == "/fan") {
+    else if (method == "POST" && route == "/fan")
+    {
       handlePostFanRoute(client);
     }
-    else if (method == "POST" && route == "/ota") {
+    else if (method == "POST" && route == "/ota")
+    {
       handleOtaRoute(client, contentLength);
-    } 
-    else if (method == "POST" && route == "/jammer") {
+    }
+    else if (method == "POST" && route == "/jammer")
+    {
       handlePostJammerRoute(client);
     }
-    else if (method == "POST" && route == "/jammers") {
+    else if (method == "POST" && route == "/jammers")
+    {
       handlePostJammersRoute(client);
     }
-    else if (method == "POST" && route == "/jammer/pulse") {
+    else if (method == "POST" && route == "/jammer/pulse")
+    {
       handlePostJammerPulseRoute(client);
     }
-    else if (method == "POST" && route == "/notifRGB") {
+    else if (method == "POST" && route == "/notifRGB")
+    {
       handleNotifRGBControl(client);
-
     }
-    else if (method == "POST" && route == "/animateRGB") {
+    else if (method == "POST" && route == "/animateRGB")
+    {
       handleAnimateRGBControl(client);
-
     }
-    else if (method == "GET" && route == "/jamm_state") {
+    else if (method == "GET" && route == "/jamm_state")
+    {
       isJammer900On = (digitalRead(JAMM_900_SENS_PIN) == LOW);
       isJammer1500On = (digitalRead(JAMM_1500_SENS_PIN) == LOW);
       isJammer2400On = (digitalRead(JAMM_2400_SENS_PIN) == LOW);
@@ -772,7 +877,8 @@ void loop() {
       handleGetJammStateRoute(client);
     }
 
-    else {
+    else
+    {
       sendJSONResponse(client, 404, "{\"status\":\"error\",\"message\":\"Endpoint or Method unsupported\"}");
     }
 
