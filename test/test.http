@@ -3,7 +3,7 @@ POST http://192.168.10.11/jammer
 Content-Type: application/json
 
 {
-    "jamm_freq": 5800,
+    "jamm_freq": 900,
     "is_on": true
 }
 
@@ -12,7 +12,7 @@ POST http://192.168.10.11/jammer
 Content-Type: application/json
 
 {
-    "jamm_freq": 2400,
+    "jamm_freq": 900,
     "is_on": false
 }
 
@@ -45,7 +45,7 @@ POST http://192.168.10.11/fan
 Content-Type: application/json
 
 {
-    "is_on": false
+    "is_on": true
 }
 
 #### Set RGB notification
