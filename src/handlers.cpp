@@ -214,6 +214,12 @@ void handlePostJammersRoute(EthernetClient &client)
   digitalWrite(JAMM_5200_PIN, is5200on);
   digitalWrite(JAMM_5800_PIN, is5800on);
 
+  // Fan turns on with any jammer; it is turned off only via POST /fan
+  if (is900on || is1500on || is2400on || is5200on || is5800on)
+  {
+    digitalWrite(FAN_PIN, HIGH);
+  }
+
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Jammers state updated\"}");
 }
 
@@ -261,6 +267,12 @@ void handlePostJammerRoute(EthernetClient &client)
   default:
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid 'jamm' frequency\"}");
     return;
+  }
+
+  // Fan turns on with any jammer; it is turned off only via POST /fan
+  if (isOn)
+  {
+    digitalWrite(FAN_PIN, HIGH);
   }
 
   DEBUG_PRINT("[HTTP] Jammer frequency ");
