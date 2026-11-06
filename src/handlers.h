@@ -11,6 +11,7 @@ void sendJSONResponse(EthernetClient &client, int statusCode, const String &json
 void handleHttpRequest();
 
 // --- Route handlers ---
+void handleGetVersionRoute(EthernetClient &client);
 void handleGetTempRoute(EthernetClient &client);
 void handleGetJammStateRoute(EthernetClient &client);
 void handleNotifRGBControl(EthernetClient &client);

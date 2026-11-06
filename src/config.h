@@ -3,6 +3,9 @@
 
 #include <Arduino.h>
 
+// Firmware version reported by GET /version; update before building a release.
+#define FIRMWARE_VERSION "1.0.0"
+
 // ============================================
 // DEBUG CONFIGURATION
 // Set to false for production/release builds

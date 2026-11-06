@@ -31,6 +31,18 @@ void sendJSONResponse(EthernetClient &client, int statusCode, const String &json
   client.println(jsonMessage);
 }
 
+void handleGetVersionRoute(EthernetClient &client)
+{
+  JsonDocument doc;
+  doc["status"] = "success";
+  doc["version"] = FIRMWARE_VERSION;
+  doc["board"] = BOARD_NAME;
+
+  String jsonResponse;
+  serializeJson(doc, jsonResponse);
+  sendJSONResponse(client, 200, jsonResponse);
+}
+
 void handleGetTempRoute(EthernetClient &client)
 {
   JsonDocument doc;
@@ -474,6 +486,10 @@ void handleHttpRequest()
   if (method == "GET" && route == "/temp")
   {
     handleGetTempRoute(client);
+  }
+  else if (method == "GET" && route == "/version")
+  {
+    handleGetVersionRoute(client);
   }
   else if (method == "POST" && route == "/fan")
   {
