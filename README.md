@@ -16,6 +16,13 @@ command turns it on again. Temperature, sensor errors, and jammer sensor changes
 do not control the fan; the operator must manage cooling. See `test/test.http`
 for example requests.
 
+### Firmware version
+
+Set `FIRMWARE_VERSION` in `src/config.h` before building and uploading a
+release. `GET /version` returns the version compiled into the running firmware,
+for example `{"status":"success","version":"0.1.0"}`. Changing the configuration
+requires rebuilding and uploading the firmware.
+
 
 ## yang belum
 - alamat ip simpan di eeprom
