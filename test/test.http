@@ -42,12 +42,12 @@ Content-Type: application/json
     "jamm_5800": false
 }
 
-#### Test Fan On
+#### Test Fan Off
 POST {{Host}}/fan
 Content-Type: application/json
 
 {
-    "is_on": true
+    "is_on": false
 }
 
 #### Set RGB notification
@@ -75,12 +75,12 @@ Content-Type: application/json
 }
 
 #### Set RGB animation
-POST {{Host}}/animateRGB
-Content-Type: application/json
+# POST {{Host}}/animateRGB
+# Content-Type: application/json
 
-{
-    "is_on": false
-}
+# {
+#     "is_on": false
+# }
 
 #### Get Temperature
 GET {{Host}}/temp
