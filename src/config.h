@@ -67,6 +67,7 @@
 #define NETWORK_CHECK_INTERVAL 5000UL      // Check every 5 seconds
 #define MAX_NETWORK_FAILURES 24            // Reinit after 24 x 5s = 2 minutes
 #define TEMP_READ_INTERVAL 5000UL         // 5 seconds
+#define STATUS_LED_INTERVAL 500UL          // LED state refresh
 #define ANIMATION_INTERVAL 20UL            // 50 FPS (20ms per frame)
 
 #endif // CONFIG_H

@@ -20,4 +20,7 @@ extern uint8_t rotationFrameSkip;   // Frame counter to slow down rotation
 // Update the rotating-dot animation (throttled internally to 20ms)
 void updateNotifAnimation();
 
+// Show real state on the strip: red = link down or network fault, yellow = jamming, blue = standby
+void updateStatusLed();
+
 #endif // LED_H

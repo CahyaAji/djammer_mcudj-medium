@@ -14,6 +14,8 @@ void setup()
   IWatchdog.begin(20000000);
 
   tempSensor.begin(); // Initialize the DallasTemperature library
+  // updateTemperature() already waits 750 ms itself; a blocking request would stall the HTTP server
+  tempSensor.setWaitForConversion(false);
   DEBUG_PRINT("[TEMP] Sensors found: ");
   DEBUG_PRINTLN(tempSensor.getDeviceCount());
 
@@ -60,8 +62,9 @@ void loop()
   // Throttled jammer sensor reading
   updateJammerSensors();
 
-  // RGB animation update (throttled internally to 20ms)
-  updateNotifAnimation();
+  // RGB animation disabled: LED shows real network state only
+  // updateNotifAnimation();
+  updateStatusLed();
 
   // Network health check (throttled internally)
   unsigned long currentTime = millis();

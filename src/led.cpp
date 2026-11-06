@@ -1,4 +1,7 @@
 #include "led.h"
+#include <Ethernet.h>
+#include "jammer.h"
+#include "network.h"
 
 // Parameter 1 = Number of pixels in strip
 // Parameter 2 = Arduino pin number (most are valid)
@@ -55,4 +58,33 @@ void updateNotifAnimation()
   }
 
   notifRGB.show();
+}
+
+void updateStatusLed()
+{
+  static unsigned long lastUpdate = 0;
+  static uint32_t lastColor = 0;
+  static bool hasColor = false;
+
+  unsigned long now = millis();
+  if ((unsigned long)(now - lastUpdate) < STATUS_LED_INTERVAL)
+    return;
+  lastUpdate = now;
+
+  uint32_t color;
+  if (networkFault || Ethernet.linkStatus() == LinkOFF)
+    color = notifRGB.Color(200, 0, 0);
+  else if (isJammer900On || isJammer1500On || isJammer2400On || isJammer5200On || isJammer5800On)
+    color = notifRGB.Color(200, 150, 0);
+  else
+    color = notifRGB.Color(0, 0, 200);
+
+  if (hasColor && color == lastColor)
+    return;
+
+  for (int i = 0; i < LED_RGB_NUM_PIXELS; i++)
+    notifRGB.setPixelColor(i, color);
+  notifRGB.show();
+  lastColor = color;
+  hasColor = true;
 }

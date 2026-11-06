@@ -19,6 +19,7 @@ extern EthernetServer server;
 // Network health monitoring
 extern unsigned long lastNetworkCheckTime;
 extern uint8_t networkFailureCount;
+extern bool networkFault; // true while W5500/server is detected as broken (LED turns red)
 
 // Initialize W5500 and start the HTTP server (with hard reset)
 void initializeNetwork();

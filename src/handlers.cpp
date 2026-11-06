@@ -12,9 +12,22 @@
 
 void sendJSONResponse(EthernetClient &client, int statusCode, const String &jsonMessage)
 {
+  const char *reason;
+  switch (statusCode)
+  {
+  case 200: reason = "OK"; break;
+  case 400: reason = "Bad Request"; break;
+  case 404: reason = "Not Found"; break;
+  case 408: reason = "Request Timeout"; break;
+  case 500: reason = "Internal Server Error"; break;
+  default: reason = "Unknown"; break;
+  }
+
   client.print("HTTP/1.1 ");
   client.print(statusCode);
-  client.println(" OK\r\nContent-Type: application/json\r\nConnection: close\r\n");
+  client.print(" ");
+  client.print(reason);
+  client.println("\r\nContent-Type: application/json\r\nConnection: close\r\n");
   client.println(jsonMessage);
 }
 
@@ -471,10 +484,11 @@ void handleHttpRequest()
   {
     handleNotifRGBControl(client);
   }
-  else if (method == "POST" && route == "/animateRGB")
-  {
-    handleAnimateRGBControl(client);
-  }
+  // Animation disabled
+  // else if (method == "POST" && route == "/animateRGB")
+  // {
+  //   handleAnimateRGBControl(client);
+  // }
   else if (method == "GET" && route == "/jamm_state")
   {
     // Force a fresh sensor read before responding
