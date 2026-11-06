@@ -1,6 +1,6 @@
 @Host = http://192.168.17.150:8018
 
-#### Test Jammer On
+#### Jammer on (also turns the fan on, including repeated requests)
 POST {{Host}}/jammer
 Content-Type: application/json
 
@@ -9,7 +9,7 @@ Content-Type: application/json
     "is_on": true
 }
 
-#### Test Jammer On
+#### Jammer off (does not turn the fan off)
 POST {{Host}}/jammer
 Content-Type: application/json
 
@@ -18,7 +18,7 @@ Content-Type: application/json
     "is_on": false
 }
 
-#### Test Multi Jammer On
+#### Multi jammer on (any true value turns the fan on)
 POST {{Host}}/jammers
 Content-Type: application/json
 
@@ -42,7 +42,15 @@ Content-Type: application/json
     "jamm_5800": false
 }
 
-#### Test Fan Off
+#### Fan on
+POST {{Host}}/fan
+Content-Type: application/json
+
+{
+    "is_on": true
+}
+
+#### Fan off (allowed even while a jammer is on)
 POST {{Host}}/fan
 Content-Type: application/json
 

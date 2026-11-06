@@ -13,6 +13,9 @@ void setup()
   Serial.begin(115200);
   IWatchdog.begin(20000000);
 
+  digitalWrite(FAN_PIN, LOW);
+  pinMode(FAN_PIN, OUTPUT);
+
   tempSensor.begin(); // Initialize the DallasTemperature library
   // updateTemperature() already waits 750 ms itself; a blocking request would stall the HTTP server
   tempSensor.setWaitForConversion(false);
@@ -25,8 +28,6 @@ void setup()
   pinMode(JAMM_2400_PIN, OUTPUT);
   pinMode(JAMM_5200_PIN, OUTPUT);
   pinMode(JAMM_5800_PIN, OUTPUT);
-
-  pinMode(FAN_PIN, OUTPUT);
 
   // Jammer output state sensor pins
   pinMode(JAMM_900_SENS_PIN, INPUT);
@@ -41,7 +42,6 @@ void setup()
   digitalWrite(JAMM_2400_PIN, LOW);
   digitalWrite(JAMM_5200_PIN, LOW);
   digitalWrite(JAMM_5800_PIN, LOW);
-  digitalWrite(FAN_PIN, LOW);
 
   // Initialize RGB indicator strip
   notifRGB.begin();

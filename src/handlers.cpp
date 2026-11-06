@@ -167,10 +167,9 @@ void handlePostFanRoute(EthernetClient &client)
     return;
   }
 
-  // Validate that required keys
   if (!doc["is_on"].is<bool>())
   {
-    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid key: fan (boolean required)\"}");
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid key: is_on (boolean required)\"}");
     return;
   }
 
@@ -208,17 +207,16 @@ void handlePostJammersRoute(EthernetClient &client)
   bool is5200on = doc["jamm_5200"];
   bool is5800on = doc["jamm_5800"];
 
+  if (is900on || is1500on || is2400on || is5200on || is5800on)
+  {
+    digitalWrite(FAN_PIN, HIGH);
+  }
+
   digitalWrite(JAMM_900_PIN, is900on);
   digitalWrite(JAMM_1500_PIN, is1500on);
   digitalWrite(JAMM_2400_PIN, is2400on);
   digitalWrite(JAMM_5200_PIN, is5200on);
   digitalWrite(JAMM_5800_PIN, is5800on);
-
-  // Fan turns on with any jammer; it is turned off only via POST /fan
-  if (is900on || is1500on || is2400on || is5200on || is5800on)
-  {
-    digitalWrite(FAN_PIN, HIGH);
-  }
 
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Jammers state updated\"}");
 }
@@ -246,34 +244,35 @@ void handlePostJammerRoute(EthernetClient &client)
   // Process the jammer command
   int jammerFreq = doc["jamm_freq"];
   bool isOn = doc["is_on"];
+  uint32_t jammerPin;
 
   switch (jammerFreq)
   {
   case 900:
-    digitalWrite(JAMM_900_PIN, isOn);
+    jammerPin = JAMM_900_PIN;
     break;
   case 1500:
-    digitalWrite(JAMM_1500_PIN, isOn);
+    jammerPin = JAMM_1500_PIN;
     break;
   case 2400:
-    digitalWrite(JAMM_2400_PIN, isOn);
+    jammerPin = JAMM_2400_PIN;
     break;
   case 5200:
-    digitalWrite(JAMM_5200_PIN, isOn);
+    jammerPin = JAMM_5200_PIN;
     break;
   case 5800:
-    digitalWrite(JAMM_5800_PIN, isOn);
+    jammerPin = JAMM_5800_PIN;
     break;
   default:
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid 'jamm' frequency\"}");
     return;
   }
 
-  // Fan turns on with any jammer; it is turned off only via POST /fan
   if (isOn)
   {
     digitalWrite(FAN_PIN, HIGH);
   }
+  digitalWrite(jammerPin, isOn);
 
   DEBUG_PRINT("[HTTP] Jammer frequency ");
   DEBUG_PRINT(jammerFreq);
