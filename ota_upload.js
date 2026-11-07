@@ -4,7 +4,7 @@ const path = require('path');
 
 // Usage: node ota_upload.js [path/to/firmware.bin]
 const TARGET_IP = '192.168.17.150';
-const TARGET_PORT = 80;
+const TARGET_PORT = 8018;
 const DEFAULT_BIN = path.join(__dirname, '.pio', 'build', 'blackpill_f411ce', 'firmware.bin');
 const action = process.argv[2] || DEFAULT_BIN;
 
@@ -22,11 +22,15 @@ function sendHttpRequest(path, method, headers, payloadData) {
         res.on('data', (chunk) => { responseString += chunk; });
         res.on('end', () => {
             console.log(`\n📥 Response [HTTP ${res.statusCode}]: ${responseString.trim()}`);
+            if (res.statusCode !== 200) {
+                process.exitCode = 1;
+            }
         });
     });
 
     req.on('error', (err) => {
         console.error(`\n❌ Network error:`, err.message);
+        process.exitCode = 1;
     });
 
     req.write(payloadData);
