@@ -4,22 +4,7 @@
 #include <Arduino.h>
 
 // Firmware version reported by GET /version; update before building a release.
-#define FIRMWARE_VERSION "1.0.0"
-
-// ============================================
-// DEBUG CONFIGURATION
-// Set to false for production/release builds
-// ============================================
-#define DEBUG_ENABLED false
-
-// Debug print macros - automatically disabled when DEBUG_ENABLED is false
-#if DEBUG_ENABLED
-#define DEBUG_PRINT(x) Serial.print(x)
-#define DEBUG_PRINTLN(x) Serial.println(x)
-#else
-#define DEBUG_PRINT(x)
-#define DEBUG_PRINTLN(x)
-#endif
+#define FIRMWARE_VERSION "1.0.1"
 
 // ============================================
 // HARDWARE PIN DEFINITIONS
@@ -33,18 +18,18 @@
 #define W5500_RST PB8
 
 // JAMM (Jammer) Output Pins
-#define JAMM_900_PIN PA3
-#define JAMM_1500_PIN PA5
-#define JAMM_2400_PIN PA2
+#define JAMM_900_PIN  PA2  //PA3
+#define JAMM_1500_PIN PA7  //PA5
+#define JAMM_2400_PIN PA3  //PA2
 #define JAMM_5200_PIN PA1
 #define JAMM_5800_PIN PA0
 
 // FAN Pin
-#define FAN_PIN PA4
+#define FAN_PIN PA6  //PA4
 
 // RGB LED Pin
 // RGB values, RED = disconnected, BLUE = connected/Standby, YELLOW = Jamming
-#define LED_RGB_PIN PA7
+#define LED_RGB_PIN PB0  //PA7
 #define LED_RGB_NUM_PIXELS 7
 
 // Temperature Sensor Pin
@@ -52,10 +37,10 @@
 
 // Jammer Output State Sensor Pins (read LOW = ON)
 #define JAMM_900_SENS_PIN PB9
-#define JAMM_1500_SENS_PIN PC14
-#define JAMM_2400_SENS_PIN PB7
-#define JAMM_5200_SENS_PIN PB6
-#define JAMM_5800_SENS_PIN PC13
+#define JAMM_1500_SENS_PIN PB7  //PC14
+#define JAMM_2400_SENS_PIN PB6  //PB7
+#define JAMM_5200_SENS_PIN PC13  //PB6
+#define JAMM_5800_SENS_PIN PC14  //PC13
 
 // ============================================
 // NETWORK CONFIGURATION
