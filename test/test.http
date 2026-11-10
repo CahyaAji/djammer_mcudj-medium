@@ -1,5 +1,7 @@
+@Host = http://192.168.17.150:80
+
 #### Test Jammer On
-POST http://192.168.10.11/jammer
+POST {{Host}}/jammer
 Content-Type: application/json
 
 {
@@ -8,7 +10,7 @@ Content-Type: application/json
 }
 
 #### Test Jammer On
-POST http://192.168.10.11/jammer
+POST {{Host}}/jammer
 Content-Type: application/json
 
 {
@@ -17,7 +19,7 @@ Content-Type: application/json
 }
 
 #### Test Multi Jammer On
-POST http://192.168.10.11/jammers
+POST {{Host}}/jammers
 Content-Type: application/json
 
 {
@@ -29,7 +31,7 @@ Content-Type: application/json
 }
 
 #### Test Multi Jammer Off
-POST http://192.168.10.11/jammers
+POST {{Host}}/jammers
 Content-Type: application/json
 
 {
@@ -41,7 +43,7 @@ Content-Type: application/json
 }
 
 #### Test Fan On
-POST http://192.168.10.11/fan
+POST {{Host}}/fan
 Content-Type: application/json
 
 {
@@ -49,7 +51,7 @@ Content-Type: application/json
 }
 
 #### Set RGB notification
-POST http://192.168.10.11/notifRGB
+POST {{Host}}/notifRGB
 Content-Type: application/json
 
 {
@@ -61,7 +63,7 @@ Content-Type: application/json
 }
 
 #### Set RGB notification
-POST http://192.168.10.11/notifRGB
+POST {{Host}}/notifRGB
 Content-Type: application/json
 
 {
@@ -73,7 +75,7 @@ Content-Type: application/json
 }
 
 #### Set RGB animation
-POST http://192.168.10.11/animateRGB
+POST {{Host}}/animateRGB
 Content-Type: application/json
 
 {
@@ -81,13 +83,13 @@ Content-Type: application/json
 }
 
 #### Get Temperature
-GET http://192.168.10.11/temp
+GET {{Host}}/temp
 
 #### Get Jammer Status
-GET http://192.168.10.11/jamm_state
+GET {{Host}}/jamm_state
 
 #### Jammer Pulse - Turn on selected, auto turn off all in 20 seconds
-POST http://192.168.10.11/jammer/pulse
+POST {{Host}}/jammer/pulse
 Content-Type: application/json
 
 {

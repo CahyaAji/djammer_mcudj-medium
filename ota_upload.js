@@ -1,19 +1,17 @@
 const http = require('http');
 const fs = require('fs');
+const path = require('path');
 
-const TARGET_IP = '192.168.10.11';
-const action = process.argv[2];
-
-if (!action) {
-    console.log("Valid operations:");
-    console.log("  node ota_upload.js stm32_ota.ino.bin   -> POST /ota (Binary upload)");
-    process.exit(0);
-}
+// Usage: node ota_upload.js [path/to/firmware.bin]
+const TARGET_IP = '192.168.17.150';
+const TARGET_PORT = 80;
+const DEFAULT_BIN = path.join(__dirname, '.pio', 'build', 'blackpill_f411ce', 'firmware.bin');
+const action = process.argv[2] || DEFAULT_BIN;
 
 function sendHttpRequest(path, method, headers, payloadData) {
     const options = {
         hostname: TARGET_IP,
-        port: 80,
+        port: TARGET_PORT,
         path: path,
         method: method,
         headers: headers
@@ -24,11 +22,15 @@ function sendHttpRequest(path, method, headers, payloadData) {
         res.on('data', (chunk) => { responseString += chunk; });
         res.on('end', () => {
             console.log(`\n📥 Response [HTTP ${res.statusCode}]: ${responseString.trim()}`);
+            if (res.statusCode !== 200) {
+                process.exitCode = 1;
+            }
         });
     });
 
     req.on('error', (err) => {
         console.error(`\n❌ Network error:`, err.message);
+        process.exitCode = 1;
     });
 
     req.write(payloadData);
@@ -37,7 +39,7 @@ function sendHttpRequest(path, method, headers, payloadData) {
 
 // --- FIRMWARE IMAGE TRANSFER (OTA) ---
 if (!fs.existsSync(action)) {
-    console.error(`❌ Error: Compilation file '${action}' missing.`);
+    console.error(`❌ Error: Firmware file '${action}' missing. Build first with 'pio run'.`);
     process.exit(1);
 }
 
@@ -61,7 +63,7 @@ if (fileSizeInBytes > 157286) {
     console.warn(`⚠️ Warning: Firmware size ${fileSizeInKB} KB exceeds 30% of STM32F411 flash (512 KB). Proceed with caution.`);
 }
 
-console.log(`🚀 Streaming flashing data out to http://${TARGET_IP}/ota...`);
+console.log(`🚀 Streaming flashing data out to http://${TARGET_IP}:${TARGET_PORT}/ota...`);
 
 sendHttpRequest('/ota', 'POST', {
     'Content-Type': 'application/octet-stream',
