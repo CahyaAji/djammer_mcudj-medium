@@ -89,8 +89,6 @@ void handleNotifRGBControl(EthernetClient &client)
     return;
   }
 
-  DEBUG_PRINTLN("[HTTP] Received /notifRGB request");
-
   bool isOn = doc["is_on"];
   int r = doc["r"];
   int g = doc["g"];
@@ -143,8 +141,6 @@ void handleAnimateRGBControl(EthernetClient &client)
     return;
   }
 
-  DEBUG_PRINTLN("[HTTP] Received /animateRGB request");
-
   bool isOn = doc["is_on"];
 
   if (isOn == false)
@@ -185,8 +181,6 @@ void handlePostFanRoute(EthernetClient &client)
     return;
   }
 
-  DEBUG_PRINTLN("[HTTP] Received Fan Control Command");
-
   bool isOn = doc["is_on"];
   digitalWrite(FAN_PIN, isOn);
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Fan state updated\"}");
@@ -209,8 +203,6 @@ void handlePostJammersRoute(EthernetClient &client)
     sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys: jamm_900, jamm_1500, jamm_2400, jamm_5200, jamm_5800 (boolean required)\"}");
     return;
   }
-
-  DEBUG_PRINTLN("[HTTP] Received Jammers Control Command");
 
   // Process the jammer commands
   bool is900on = doc["jamm_900"];
@@ -251,8 +243,6 @@ void handlePostJammerRoute(EthernetClient &client)
     return;
   }
 
-  DEBUG_PRINTLN("[HTTP] Received Jammer Command");
-
   // Process the jammer command
   int jammerFreq = doc["jamm_freq"];
   bool isOn = doc["is_on"];
@@ -286,10 +276,6 @@ void handlePostJammerRoute(EthernetClient &client)
   }
   digitalWrite(jammerPin, isOn);
 
-  DEBUG_PRINT("[HTTP] Jammer frequency ");
-  DEBUG_PRINT(jammerFreq);
-  DEBUG_PRINT(" is now ");
-  DEBUG_PRINTLN(isOn ? "ON" : "OFF");
   String response = "{\"success\": true,\"message\":\"Jammer frequency " + String(jammerFreq) + " is now " + (isOn ? "ON" : "OFF") + "\"}";
   sendJSONResponse(client, 200, response);
 }
@@ -302,10 +288,6 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
     sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Invalid size constraints\"}");
     return;
   }
-
-  DEBUG_PRINT("[OTA] Initializing landing partition allocation for: ");
-  DEBUG_PRINT(expectedSize);
-  DEBUG_PRINTLN(" bytes.");
 
   if (InternalStorage.open(expectedSize))
   {
@@ -321,7 +303,6 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
       // Timeout protection for OTA process
       if ((unsigned long)(millis() - otaTimeout) > OTA_TIMEOUT)
       {
-        DEBUG_PRINTLN("[OTA] Timeout during transfer");
         InternalStorage.close();
         sendJSONResponse(client, 408, "{\"status\":\"error\",\"message\":\"OTA timeout\"}");
         client.stop();
@@ -339,7 +320,6 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
             totalReceived++;
             if (totalReceived > expectedSize)
             {
-              DEBUG_PRINTLN("[OTA] Received more data than expected");
               InternalStorage.close();
               sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Size mismatch\"}");
               client.stop();
@@ -356,12 +336,8 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
     }
     InternalStorage.close();
 
-    DEBUG_PRINT("[OTA] Extraction finished. Received count: ");
-    DEBUG_PRINTLN(totalReceived);
-
     if (totalReceived == expectedSize)
     {
-      DEBUG_PRINTLN("[OTA] Verification Success! Performing system remap...");
       sendJSONResponse(client, 200, "{\"status\":\"success\",\"message\":\"Flashing complete. Rebooting.\"}");
       client.stop();
       delay(500);
@@ -371,13 +347,11 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
     }
     else
     {
-      DEBUG_PRINTLN("[OTA] Critical Fail: Packet sizes do not match header metadata.");
       sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Size mismatch\"}");
     }
   }
   else
   {
-    DEBUG_PRINTLN("[OTA] Failed to open internal storage");
     sendJSONResponse(client, 500, "{\"status\":\"error\",\"message\":\"Storage init failed\"}");
   }
 
@@ -405,7 +379,6 @@ void handleHttpRequest()
     // Overflow-safe timeout check (3 second timeout)
     if ((unsigned long)(millis() - timeoutStart) > 3000UL)
     {
-      DEBUG_PRINTLN("[HTTP] Request timeout - closing connection");
       break;
     }
 
@@ -432,11 +405,6 @@ void handleHttpRequest()
           {
             method = currentLine.substring(0, firstSpace);
             route = currentLine.substring(firstSpace + 1, secondSpace);
-
-            DEBUG_PRINT("[HTTP] Intercepted Request: ");
-            DEBUG_PRINT(method);
-            DEBUG_PRINT(" -> ");
-            DEBUG_PRINTLN(route);
           }
         }
 
@@ -465,7 +433,6 @@ void handleHttpRequest()
         }
         else
         {
-          DEBUG_PRINTLN("[HTTP] Header line too long - rejecting");
           sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Header too long\"}");
           client.stop();
           return;
@@ -477,7 +444,6 @@ void handleHttpRequest()
   // Validate that we got valid method and route
   if (!headersParsed || method.length() == 0 || route.length() == 0)
   {
-    DEBUG_PRINTLN("[HTTP] Invalid request - missing method or route");
     client.stop();
     return;
   }

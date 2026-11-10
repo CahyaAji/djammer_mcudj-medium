@@ -10,7 +10,6 @@
 
 void setup()
 {
-  Serial.begin(115200);
   IWatchdog.begin(20000000);
 
   digitalWrite(FAN_PIN, LOW);
@@ -19,8 +18,6 @@ void setup()
   tempSensor.begin(); // Initialize the DallasTemperature library
   // updateTemperature() already waits 750 ms itself; a blocking request would stall the HTTP server
   tempSensor.setWaitForConversion(false);
-  DEBUG_PRINT("[TEMP] Sensors found: ");
-  DEBUG_PRINTLN(tempSensor.getDeviceCount());
 
   // Jammer output pins
   pinMode(JAMM_900_PIN, OUTPUT);

@@ -21,8 +21,6 @@ static bool jammerLinkDownTimerActive = false;
 
 void initializeNetwork()
 {
-  DEBUG_PRINTLN("[NET] Initializing network...");
-
   // Hard Reset W5500
   pinMode(W5500_RST, OUTPUT);
   digitalWrite(W5500_RST, LOW);
@@ -46,9 +44,6 @@ void initializeNetwork()
   IWatchdog.reload();
 
   server.begin();
-
-  DEBUG_PRINT("[NET] Server listening on: http://");
-  DEBUG_PRINTLN(Ethernet.localIP());
 }
 
 void checkNetworkHealth()
@@ -58,7 +53,6 @@ void checkNetworkHealth()
   // localIP() reads the chip's live IP register (hardwareStatus() is only cached from init).
   if (Ethernet.localIP() != ip)
   {
-    DEBUG_PRINTLN("[NET] W5500 lost its configuration. Reinitializing network...");
     networkFault = true;
     initializeNetwork();
     networkFailureCount = 0;
@@ -84,7 +78,6 @@ void checkNetworkHealth()
   }
   else if (++noListenCount >= 2)
   {
-    DEBUG_PRINTLN("[NET] No listening socket. Reinitializing network...");
     networkFault = true;
     initializeNetwork();
     networkFailureCount = 0;
@@ -99,12 +92,8 @@ void checkNetworkHealth()
   if (linkStatus == LinkOFF)
   {
     networkFailureCount++;
-    DEBUG_PRINT("[NET] Link DOWN detected. Failure count: ");
-    DEBUG_PRINTLN(networkFailureCount);
-
     if (networkFailureCount >= MAX_NETWORK_FAILURES)
     {
-      DEBUG_PRINTLN("[NET] Max failures reached. Reinitializing network...");
       initializeNetwork();
       networkFailureCount = 0;
     }
@@ -115,7 +104,6 @@ void checkNetworkHealth()
     // Link is good, reset failure counter
     if (networkFailureCount > 0)
     {
-      DEBUG_PRINTLN("[NET] Link restored.");
       networkFailureCount = 0;
     }
   }
