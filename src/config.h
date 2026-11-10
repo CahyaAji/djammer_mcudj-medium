@@ -46,6 +46,11 @@
 // NETWORK CONFIGURATION
 // ============================================
 #define HTTP_PORT 8018
+#define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x41, 0x00}
+#define STATIC_IP 192, 168, 17, 150
+#define GATEWAY_IP 192, 168, 17, 1
+#define SUBNET_MASK 255, 255, 255, 0
+#define DNS_IP 192, 168, 10, 1
 
 // ============================================
 // TIMING CONSTANTS

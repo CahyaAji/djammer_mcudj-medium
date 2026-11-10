@@ -4,11 +4,11 @@
 #include "jammer.h"
 #include "led.h"
 
-byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0x41, 0x00};
-IPAddress ip(192, 168, 17, 150);
-IPAddress gateway(192, 168, 17, 1);
-IPAddress subnet(255, 255, 255, 0);
-IPAddress myDns(192, 168, 10, 1);
+byte mac[] = MAC_ADDRESS;
+IPAddress ip(STATIC_IP);
+IPAddress gateway(GATEWAY_IP);
+IPAddress subnet(SUBNET_MASK);
+IPAddress myDns(DNS_IP);
 
 EthernetServer server(HTTP_PORT);
 
