@@ -8,6 +8,24 @@ POST {{Host}}/jammer
 Content-Type: application/json
 
 {
+    "jamm_freq": 5200,
+    "is_on": true
+}
+
+#### Jammer off (auto mode then uses the temperatures)
+POST {{Host}}/jammer
+Content-Type: application/json
+
+{
+    "jamm_freq": 5200,
+    "is_on": false
+}
+
+#### Jammer on (turns the fan on in auto mode)
+POST {{Host}}/jammer
+Content-Type: application/json
+
+{
     "jamm_freq": 900,
     "is_on": true
 }
@@ -26,19 +44,18 @@ POST {{Host}}/jammers
 Content-Type: application/json
 
 {
-    "jamm_900": false,
-    "jamm_1500": true,
+    "jamm_900": true,
+    "jamm_1500": false,
     "jamm_2400": true,
-    "jamm_5200": true,
-    "jamm_5800": true
+    "jamm_5200": false,
+    "jamm_5800": false
 }
 
 #### Test Multi Jammer Off
-POST {{Host}}/jammers
 Content-Type: application/json
 
 {
-    "jamm_900": false,
+    "jamm_900": false, 
     "jamm_1500": false,
     "jamm_2400": false,
     "jamm_5200": false,

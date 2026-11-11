@@ -3,8 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 // Usage: node ota_upload.js [path/to/firmware.bin]
-const TARGET_IP = '192.168.10.11';
-const TARGET_PORT = 80;
+const TARGET_IP = '192.168.17.150';
+const TARGET_PORT = 8018;
 const DEFAULT_BIN = path.join(__dirname, '.pio', 'build', 'blackpill_f411ce', 'firmware.bin');
 const action = process.argv[2] || DEFAULT_BIN;
 
