@@ -17,6 +17,8 @@ void handleGetJammStateRoute(EthernetClient &client);
 void handleNotifRGBControl(EthernetClient &client);
 void handleAnimateRGBControl(EthernetClient &client);
 void handlePostFanRoute(EthernetClient &client);
+void handleGetFanRoute(EthernetClient &client);
+void handlePostFanModeRoute(EthernetClient &client);
 void handlePostJammersRoute(EthernetClient &client);
 void handlePostJammerRoute(EthernetClient &client);
 void handleOtaRoute(EthernetClient &client, long expectedSize);

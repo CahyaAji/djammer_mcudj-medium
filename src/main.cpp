@@ -2,6 +2,7 @@
 #include <IWatchdog.h>
 
 #include "config.h"
+#include "fan.h"
 #include "jammer.h"
 #include "led.h"
 #include "network.h"
@@ -12,8 +13,7 @@ void setup()
 {
   IWatchdog.begin(20000000);
 
-  digitalWrite(FAN_PIN, LOW);
-  pinMode(FAN_PIN, OUTPUT);
+  initializeFan();
 
   tempSensor.begin(); // Initialize the DallasTemperature library
   // updateTemperature() already waits 750 ms itself; a blocking request would stall the HTTP server
@@ -58,6 +58,7 @@ void loop()
 
   // Throttled jammer sensor reading
   updateJammerSensors();
+  updateFan();
 
   // RGB animation disabled: LED shows real network state only
   // updateNotifAnimation();
@@ -73,10 +74,12 @@ void loop()
 
   // Non-blocking temperature conversion
   updateTemperature();
+  updateFan();
 
   // Serve an incoming HTTP request, if any
   handleHttpRequest();
 
   // Enforce the jammer shutdown grace period after Ethernet link loss.
   enforceJammerLinkSafety();
+  updateFan();
 }

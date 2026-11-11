@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 // Firmware version reported by GET /version; update before building a release.
-#define FIRMWARE_VERSION "1.0.1"
+#define FIRMWARE_VERSION "1.1.0"
 
 // ============================================
 // HARDWARE PIN DEFINITIONS
@@ -26,6 +26,8 @@
 
 // FAN Pin
 #define FAN_PIN PA6  //PA4
+#define FAN_AUTO_ON_TEMP_C 40.0f
+#define FAN_AUTO_OFF_TEMP_C 30.0f
 
 // RGB LED Pin
 // RGB values, RED = disconnected, BLUE = connected/Standby, YELLOW = Jamming
@@ -46,7 +48,7 @@
 // NETWORK CONFIGURATION
 // ============================================
 #define HTTP_PORT 8018
-#define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x41, 0x00}
+#define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x41, 0x00} // Change this to a unique MAC address for your device
 #define STATIC_IP 192, 168, 17, 150
 #define GATEWAY_IP 192, 168, 17, 1
 #define SUBNET_MASK 255, 255, 255, 0

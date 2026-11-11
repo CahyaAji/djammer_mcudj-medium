@@ -5,6 +5,7 @@
 #include <IWatchdog.h>
 
 #include "config.h"
+#include "fan.h"
 #include "jammer.h"
 #include "led.h"
 #include "network.h"
@@ -19,6 +20,7 @@ void sendJSONResponse(EthernetClient &client, int statusCode, const String &json
   case 400: reason = "Bad Request"; break;
   case 404: reason = "Not Found"; break;
   case 408: reason = "Request Timeout"; break;
+  case 409: reason = "Conflict"; break;
   case 500: reason = "Internal Server Error"; break;
   default: reason = "Unknown"; break;
   }
@@ -164,6 +166,40 @@ void handleAnimateRGBControl(EthernetClient &client)
   sendJSONResponse(client, 200, jsonResponse);
 }
 
+void handleGetFanRoute(EthernetClient &client)
+{
+  JsonDocument doc;
+  doc["mode"] = getFanMode() == FanMode::Auto ? "auto" : "manual";
+  doc["is_on"] = isFanOn();
+
+  String jsonResponse;
+  serializeJson(doc, jsonResponse);
+  sendJSONResponse(client, 200, jsonResponse);
+}
+
+void handlePostFanModeRoute(EthernetClient &client)
+{
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, client);
+  if (error || !doc["mode"].is<const char *>())
+  {
+    sendJSONResponse(client, 400, "{\"success\":false,\"message\":\"Mode must be auto or manual\"}");
+    return;
+  }
+
+  if (doc["mode"] == "auto")
+    setFanMode(FanMode::Auto);
+  else if (doc["mode"] == "manual")
+    setFanMode(FanMode::Manual);
+  else
+  {
+    sendJSONResponse(client, 400, "{\"success\":false,\"message\":\"Mode must be auto or manual\"}");
+    return;
+  }
+
+  sendJSONResponse(client, 200, "{\"success\":true,\"message\":\"Fan mode updated\"}");
+}
+
 void handlePostFanRoute(EthernetClient &client)
 {
   JsonDocument doc;
@@ -182,7 +218,11 @@ void handlePostFanRoute(EthernetClient &client)
   }
 
   bool isOn = doc["is_on"];
-  digitalWrite(FAN_PIN, isOn);
+  if (!setManualFan(isOn))
+  {
+    sendJSONResponse(client, 409, "{\"success\":false,\"message\":\"Fan control requires manual mode\"}");
+    return;
+  }
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Fan state updated\"}");
 }
 
@@ -211,16 +251,12 @@ void handlePostJammersRoute(EthernetClient &client)
   bool is5200on = doc["jamm_5200"];
   bool is5800on = doc["jamm_5800"];
 
-  if (is900on || is1500on || is2400on || is5200on || is5800on)
-  {
-    digitalWrite(FAN_PIN, HIGH);
-  }
-
   digitalWrite(JAMM_900_PIN, is900on);
   digitalWrite(JAMM_1500_PIN, is1500on);
   digitalWrite(JAMM_2400_PIN, is2400on);
   digitalWrite(JAMM_5200_PIN, is5200on);
   digitalWrite(JAMM_5800_PIN, is5800on);
+  updateFan();
 
   sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Jammers state updated\"}");
 }
@@ -270,11 +306,8 @@ void handlePostJammerRoute(EthernetClient &client)
     return;
   }
 
-  if (isOn)
-  {
-    digitalWrite(FAN_PIN, HIGH);
-  }
   digitalWrite(jammerPin, isOn);
+  updateFan();
 
   String response = "{\"success\": true,\"message\":\"Jammer frequency " + String(jammerFreq) + " is now " + (isOn ? "ON" : "OFF") + "\"}";
   sendJSONResponse(client, 200, response);
@@ -460,6 +493,14 @@ void handleHttpRequest()
   else if (method == "POST" && route == "/fan")
   {
     handlePostFanRoute(client);
+  }
+  else if (method == "GET" && route == "/fan")
+  {
+    handleGetFanRoute(client);
+  }
+  else if (method == "POST" && route == "/fan/mode")
+  {
+    handlePostFanModeRoute(client);
   }
   else if (method == "POST" && route == "/ota")
   {

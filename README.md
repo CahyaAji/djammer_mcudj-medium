@@ -5,16 +5,27 @@
 
 ### Fan control
 
-The fan starts off after a restart. A valid `POST /jammer` command with
-`"is_on": true`, or a `POST /jammers` command with any jammer set to `true`,
-turns the fan on, even if the command repeats an existing state. Commands that
-turn jammers off do not turn the fan off.
+The fan starts in **auto** mode and runs until both temperature sensors have
+valid readings. In auto mode, it runs whenever a jammer is commanded on or a
+jammer state sensor reports on. Otherwise, it turns on when either temperature
+exceeds 40 °C and turns off only when both temperatures are below 30 °C. Between
+these thresholds it retains its previous state. If either temperature sensor is
+missing or invalid, the fan runs as a precaution. Thresholds can be changed in
+`src/config.h`.
 
-Use `POST /fan` with `{"is_on": true}` or `{"is_on": false}` to control the fan
-manually, including turning it off while a jammer is active. The next jammer-on
-command turns it on again. Temperature, sensor errors, and jammer sensor changes
-do not control the fan; the operator must manage cooling. See `test/test.http`
-for example requests.
+Use `POST /fan/mode` with `{"mode":"auto"}` or `{"mode":"manual"}` to change
+modes. Switching to auto immediately applies the automatic rules; switching to
+manual retains the current fan state. In manual mode, use `POST /fan` with
+`{"is_on":true}` or `{"is_on":false}`; jammer and temperature changes do not
+override manual control. `POST /fan` returns HTTP 409 in auto mode. `GET /fan`
+returns the current mode and fan state. The mode resets to auto after restart.
+See `test/test.http` for example requests.
+
+Run the fan control host tests with:
+
+```sh
+c++ -std=c++11 -Wall -Wextra -Werror -I test/host/stubs -I src test/host/fan_test.cpp src/fan.cpp -o /tmp/djammer-fan-test && /tmp/djammer-fan-test
+```
 
 ### Firmware version
 
@@ -26,4 +37,3 @@ requires rebuilding and uploading the firmware.
 
 ## yang belum
 - alamat ip simpan di eeprom
-- fan turn on/off by temperature (auto)
