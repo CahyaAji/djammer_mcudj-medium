@@ -39,6 +39,7 @@ void handleGetVersionRoute(EthernetClient &client)
   doc["status"] = "success";
   doc["version"] = FIRMWARE_VERSION;
   doc["board"] = BOARD_NAME;
+  doc["sn"] = SERIAL_NUMBER;
 
   String jsonResponse;
   serializeJson(doc, jsonResponse);

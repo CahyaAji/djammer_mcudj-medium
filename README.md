@@ -27,12 +27,13 @@ Run the fan control host tests with:
 c++ -std=c++11 -Wall -Wextra -Werror -I test/host/stubs -I src test/host/fan_test.cpp src/fan.cpp -o /tmp/djammer-fan-test && /tmp/djammer-fan-test
 ```
 
-### Firmware version
+### Firmware version and serial number
 
-Set `FIRMWARE_VERSION` in `src/config.h` before building and uploading a
-release. `GET /version` returns the version compiled into the running firmware,
-for example `{"status":"success","version":"0.1.0"}`. Changing the configuration
-requires rebuilding and uploading the firmware.
+Set `FIRMWARE_VERSION` and the device's `SERIAL_NUMBER` in `src/config.h` before
+building and uploading. The serial number defaults to `"UNSET"` until you set
+it. `GET /version` returns the compiled-in values and board name, for example
+`{"status":"success","version":"1.1.0","board":"<board name>","sn":"<serial number>"}`.
+Changing the configuration requires rebuilding and uploading the firmware.
 
 
 ## yang belum

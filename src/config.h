@@ -4,7 +4,12 @@
 #include <Arduino.h>
 
 // Firmware version reported by GET /version; update before building a release.
-#define FIRMWARE_VERSION "1.1.0"
+#define FIRMWARE_VERSION "1.1.1"
+
+// Device serial number reported by GET /version; set before building.
+// Keep it to 32 ASCII characters or fewer to limit response memory usage.
+// This recommended limit is not enforced.
+#define SERIAL_NUMBER "ADN06SCM24NRF00ADR"
 
 // ============================================
 // HARDWARE PIN DEFINITIONS

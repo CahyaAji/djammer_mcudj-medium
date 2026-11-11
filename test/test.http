@@ -1,6 +1,6 @@
 @Host = http://192.168.17.150:8018
 
-#### Get firmware version
+#### Get firmware version, board and serial number
 GET {{Host}}/version
 
 #### Jammer on (turns the fan on in auto mode)
@@ -26,7 +26,7 @@ POST {{Host}}/jammers
 Content-Type: application/json
 
 {
-    "jamm_900": true,
+    "jamm_900": false,
     "jamm_1500": true,
     "jamm_2400": true,
     "jamm_5200": true,
