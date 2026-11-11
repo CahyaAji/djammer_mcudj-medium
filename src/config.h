@@ -4,12 +4,12 @@
 #include <Arduino.h>
 
 // Firmware version reported by GET /version; update before building a release.
-#define FIRMWARE_VERSION "1.1.1"
+#define FIRMWARE_VERSION "1.1.2"
 
 // Device serial number reported by GET /version; set before building.
 // Keep it to 32 ASCII characters or fewer to limit response memory usage.
 // This recommended limit is not enforced.
-#define SERIAL_NUMBER "ADN06SCM24NRF00ADR"
+#define SERIAL_NUMBER "ADN06SCM24NRF02ADR"
 
 // ============================================
 // HARDWARE PIN DEFINITIONS
@@ -53,7 +53,7 @@
 // NETWORK CONFIGURATION
 // ============================================
 #define HTTP_PORT 8018
-#define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x41, 0x00} // Change this to a unique MAC address for your device
+#define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x41, 0x02} // Change this to a unique MAC address for your device
 #define STATIC_IP 192, 168, 17, 150
 #define GATEWAY_IP 192, 168, 17, 1
 #define SUBNET_MASK 255, 255, 255, 0
@@ -65,7 +65,7 @@
 #define JAMMER_SENSOR_READ_INTERVAL 2000UL // ms
 #define JAMMER_LINK_DOWN_SHUTOFF_DELAY 20000UL // ms
 #define NETWORK_CHECK_INTERVAL 5000UL      // Check every 5 seconds
-#define MAX_NETWORK_FAILURES 24            // Reinit after 24 x 5s = 2 minutes
+#define MAX_NETWORK_FAILURES 24            // Hard reset after 24 x 5s = 120s (tiers: PHY@2,@4 / soft@7)
 #define TEMP_READ_INTERVAL 5000UL         // 5 seconds
 #define STATUS_LED_INTERVAL 500UL          // LED state refresh
 #define ANIMATION_INTERVAL 20UL            // 50 FPS (20ms per frame)
