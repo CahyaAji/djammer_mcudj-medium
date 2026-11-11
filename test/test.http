@@ -3,7 +3,7 @@
 #### Get firmware version
 GET {{Host}}/version
 
-#### Jammer on (also turns the fan on, including repeated requests)
+#### Jammer on (turns the fan on in auto mode)
 POST {{Host}}/jammer
 Content-Type: application/json
 
@@ -12,7 +12,7 @@ Content-Type: application/json
     "is_on": true
 }
 
-#### Jammer off (does not turn the fan off)
+#### Jammer off (auto mode then uses the temperatures)
 POST {{Host}}/jammer
 Content-Type: application/json
 
@@ -21,7 +21,7 @@ Content-Type: application/json
     "is_on": false
 }
 
-#### Multi jammer on (any true value turns the fan on)
+#### Multi jammer on (any true value turns the fan on in auto mode)
 POST {{Host}}/jammers
 Content-Type: application/json
 
@@ -45,7 +45,18 @@ Content-Type: application/json
     "jamm_5800": false
 }
 
-#### Fan on
+#### Get fan mode and state
+GET {{Host}}/fan
+
+#### Switch to manual mode
+POST {{Host}}/fan/mode
+Content-Type: application/json
+
+{
+    "mode": "manual"
+}
+
+#### Fan on (manual mode only)
 POST {{Host}}/fan
 Content-Type: application/json
 
@@ -53,12 +64,20 @@ Content-Type: application/json
     "is_on": true
 }
 
-#### Fan off (allowed even while a jammer is on)
+#### Fan off (manual mode only, allowed even while a jammer is on)
 POST {{Host}}/fan
 Content-Type: application/json
 
 {
     "is_on": false
+}
+
+#### Switch to auto mode
+POST {{Host}}/fan/mode
+Content-Type: application/json
+
+{
+    "mode": "auto"
 }
 
 #### Set RGB notification
