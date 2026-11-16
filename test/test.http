@@ -3,7 +3,7 @@
 #### Get firmware version, board and serial number
 GET {{Host}}/version
 
-#### Jammer on (turns the fan on in auto mode)
+#### Jammer on
 POST {{Host}}/jammer
 Content-Type: application/json
 
@@ -12,7 +12,7 @@ Content-Type: application/json
     "is_on": true
 }
 
-#### Jammer off (auto mode then uses the temperatures)
+#### Jammer off
 POST {{Host}}/jammer
 Content-Type: application/json
 
@@ -21,37 +21,21 @@ Content-Type: application/json
     "is_on": false
 }
 
-#### Jammer on (turns the fan on in auto mode)
-POST {{Host}}/jammer
-Content-Type: application/json
 
-{
-    "jamm_freq": 900,
-    "is_on": true
-}
-
-#### Jammer off (auto mode then uses the temperatures)
-POST {{Host}}/jammer
-Content-Type: application/json
-
-{
-    "jamm_freq": 900,
-    "is_on": false
-}
-
-#### Multi jammer on (any true value turns the fan on in auto mode)
+#### Multi jammer on
 POST {{Host}}/jammers
 Content-Type: application/json
 
 {
-    "jamm_900": true,
-    "jamm_1500": false,
+    "jamm_900": false,
+    "jamm_1500": true,
     "jamm_2400": true,
-    "jamm_5200": false,
-    "jamm_5800": false
+    "jamm_5200": true,
+    "jamm_5800": true
 }
 
-#### Test Multi Jammer Off
+#### All jammer off
+POST {{Host}}/jammers
 Content-Type: application/json
 
 {
@@ -62,8 +46,18 @@ Content-Type: application/json
     "jamm_5800": false
 }
 
+
 #### Get fan mode and state
 GET {{Host}}/fan
+
+
+#### Switch to auto mode
+POST {{Host}}/fan/mode
+Content-Type: application/json
+
+{
+    "mode": "auto"
+}
 
 #### Switch to manual mode
 POST {{Host}}/fan/mode
@@ -72,6 +66,7 @@ Content-Type: application/json
 {
     "mode": "manual"
 }
+
 
 #### Fan on (manual mode only)
 POST {{Host}}/fan
@@ -88,46 +83,6 @@ Content-Type: application/json
 {
     "is_on": false
 }
-
-#### Switch to auto mode
-POST {{Host}}/fan/mode
-Content-Type: application/json
-
-{
-    "mode": "auto"
-}
-
-#### Set RGB notification
-POST {{Host}}/notifRGB
-Content-Type: application/json
-
-{
-    "is_on": true,
-    "r": 0,
-    "g": 200,
-    "b": 0,
-    "numb": 0
-}
-
-#### Set RGB notification
-POST {{Host}}/notifRGB
-Content-Type: application/json
-
-{
-    "is_on": true,
-    "r": 200,
-    "g": 0,
-    "b": 0,
-    "numb": 0
-}
-
-#### Set RGB animation
-# POST {{Host}}/animateRGB
-# Content-Type: application/json
-
-# {
-#     "is_on": false
-# }
 
 #### Get Temperature
 GET {{Host}}/temp
