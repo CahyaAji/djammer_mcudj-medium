@@ -4,12 +4,12 @@
 #include <Arduino.h>
 
 // Firmware version reported by GET /version; update before building a release.
-#define FIRMWARE_VERSION "1.1.2"
+#define FIRMWARE_VERSION "1.1.3"
 
 // Device serial number reported by GET /version; set before building.
 // Keep it to 32 ASCII characters or fewer to limit response memory usage.
 // This recommended limit is not enforced.
-#define SERIAL_NUMBER "ADN06SCM24NRF02ADR"
+#define SERIAL_NUMBER "ADN06SCM24NRF15ADR"
 
 // ============================================
 // HARDWARE PIN DEFINITIONS
@@ -53,7 +53,7 @@
 // NETWORK CONFIGURATION
 // ============================================
 #define HTTP_PORT 8018
-#define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x41, 0x02} // Change this to a unique MAC address for your device
+#define MAC_ADDRESS {0xDE, 0xAD, 0xBE, 0xEF, 0x41, 0x0F} // Change this to a unique MAC address for your device
 #define STATIC_IP 192, 168, 17, 150
 #define GATEWAY_IP 192, 168, 17, 1
 #define SUBNET_MASK 255, 255, 255, 0
