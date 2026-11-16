@@ -14,12 +14,14 @@ void handleHttpRequest();
 void handleGetVersionRoute(EthernetClient &client);
 void handleGetTempRoute(EthernetClient &client);
 void handleGetJammStateRoute(EthernetClient &client);
+void handleGetStateRoute(EthernetClient &client);
 void handleNotifRGBControl(EthernetClient &client);
 void handleAnimateRGBControl(EthernetClient &client);
 void handlePostFanRoute(EthernetClient &client);
 void handleGetFanRoute(EthernetClient &client);
 void handlePostFanModeRoute(EthernetClient &client);
 void handlePostJammersRoute(EthernetClient &client);
+void handlePostDeskCmdRoute(EthernetClient &client);
 void handlePostJammerRoute(EthernetClient &client);
 void handleOtaRoute(EthernetClient &client, long expectedSize);
 

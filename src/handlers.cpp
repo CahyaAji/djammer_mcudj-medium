@@ -11,6 +11,9 @@
 #include "network.h"
 #include "temperature.h"
 
+// Desktop mode (0 = OFF, 1 = ON, 2 = AUTO) reported by GET /jamm_state
+byte desktopMode = 0;
+
 void sendJSONResponse(EthernetClient &client, int statusCode, const String &jsonMessage)
 {
   const char *reason;
@@ -36,7 +39,7 @@ void sendJSONResponse(EthernetClient &client, int statusCode, const String &json
 void handleGetVersionRoute(EthernetClient &client)
 {
   JsonDocument doc;
-  doc["status"] = "success";
+  doc["success"] = true;
   doc["version"] = FIRMWARE_VERSION;
   doc["board"] = BOARD_NAME;
   doc["sn"] = SERIAL_NUMBER;
@@ -50,7 +53,7 @@ void handleGetTempRoute(EthernetClient &client)
 {
   JsonDocument doc;
 
-  doc["status"] = "success";
+  doc["success"] = true;
   doc["temp_0_c"] = cachedTempC0;
   doc["temp_1_c"] = cachedTempC1;
 
@@ -63,12 +66,34 @@ void handleGetJammStateRoute(EthernetClient &client)
 {
   JsonDocument doc;
 
-  doc["status"] = "success";
+  doc["success"] = true;
+  doc["desktop_mode"] = desktopMode;
+  doc["temp_0_c"] = cachedTempC0;
+  doc["temp_1_c"] = cachedTempC1;
   doc["jamm_900"] = isJammer900On;
   doc["jamm_1500"] = isJammer1500On;
   doc["jamm_2400"] = isJammer2400On;
   doc["jamm_5200"] = isJammer5200On;
   doc["jamm_5800"] = isJammer5800On;
+
+  String jsonResponse;
+  serializeJson(doc, jsonResponse);
+  sendJSONResponse(client, 200, jsonResponse);
+}
+
+void handleGetStateRoute(EthernetClient &client)
+{
+  JsonDocument doc;
+
+  doc["success"] = true;
+  doc["desktop_mode"] = desktopMode;
+  doc["temp_0_c"] = cachedTempC0;
+  doc["temp_1_c"] = cachedTempC1;
+  doc["jamm_900"] = digitalRead(JAMM_900_PIN);
+  doc["jamm_1500"] = digitalRead(JAMM_1500_PIN);
+  doc["jamm_2400"] = digitalRead(JAMM_2400_PIN);
+  doc["jamm_5200"] = digitalRead(JAMM_5200_PIN);
+  doc["jamm_5800"] = digitalRead(JAMM_5800_PIN);
 
   String jsonResponse;
   serializeJson(doc, jsonResponse);
@@ -170,6 +195,7 @@ void handleAnimateRGBControl(EthernetClient &client)
 void handleGetFanRoute(EthernetClient &client)
 {
   JsonDocument doc;
+  doc["success"] = true;
   doc["mode"] = getFanMode() == FanMode::Auto ? "auto" : "manual";
   doc["is_on"] = isFanOn();
 
@@ -259,7 +285,69 @@ void handlePostJammersRoute(EthernetClient &client)
   digitalWrite(JAMM_5800_PIN, is5800on);
   updateFan();
 
-  sendJSONResponse(client, 200, "{\"success\": true,\"message\":\"Jammers state updated\"}");
+  JsonDocument responseDoc;
+  responseDoc["success"] = true;
+  responseDoc["desktop_mode"] = desktopMode;
+  responseDoc["fan_mode"] = getFanMode() == FanMode::Auto ? "auto" : "manual";
+  responseDoc["temp_0_c"] = cachedTempC0;
+  responseDoc["temp_1_c"] = cachedTempC1;
+
+  String jsonResponse;
+  serializeJson(responseDoc, jsonResponse);
+  sendJSONResponse(client, 200, jsonResponse);
+}
+
+void handlePostDeskCmdRoute(EthernetClient &client)
+{
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, client);
+
+  if (error)
+  {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Invalid JSON or body missing\"}");
+    return;
+  }
+
+  // Validate that required keys
+  if (!doc["jamm_900"].is<bool>() || !doc["jamm_1500"].is<bool>() || !doc["jamm_2400"].is<bool>() || !doc["jamm_5200"].is<bool>() || !doc["jamm_5800"].is<bool>() || !doc["desktop_mode"].is<byte>())
+  {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"Missing or invalid keys: jamm_900, jamm_1500, jamm_2400, jamm_5200, jamm_5800, desktop_mode (boolean and byte required)\"}");
+    return;
+  }
+
+  // Process the jammer commands
+  bool is900on = doc["jamm_900"];
+  bool is1500on = doc["jamm_1500"];
+  bool is2400on = doc["jamm_2400"];
+  bool is5200on = doc["jamm_5200"];
+  bool is5800on = doc["jamm_5800"];
+  byte desktopModeValue = doc["desktop_mode"];
+
+  if (desktopModeValue > 2)
+  {
+    sendJSONResponse(client, 400, "{\"success\": false,\"message\":\"desktop_mode must be 0, 1, or 2\"}");
+    return;
+  }
+
+  desktopMode = desktopModeValue;
+
+  digitalWrite(JAMM_900_PIN, is900on);
+  digitalWrite(JAMM_1500_PIN, is1500on);
+  digitalWrite(JAMM_2400_PIN, is2400on);
+  digitalWrite(JAMM_5200_PIN, is5200on);
+  digitalWrite(JAMM_5800_PIN, is5800on);
+  updateFan();
+
+  JsonDocument responseDoc;
+  responseDoc["success"] = true;
+  responseDoc["desktop_mode"] = desktopMode;
+  responseDoc["fan_mode"] = getFanMode() == FanMode::Auto ? "auto" : "manual";
+  responseDoc["temp_0_c"] = cachedTempC0;
+  responseDoc["temp_1_c"] = cachedTempC1;
+
+  String jsonResponse;
+  serializeJson(responseDoc, jsonResponse);
+  sendJSONResponse(client, 200, jsonResponse);
 }
 
 void handlePostJammerRoute(EthernetClient &client)
@@ -319,7 +407,7 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
 {
   if (expectedSize <= 0 || expectedSize > 256000)
   {
-    sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Invalid size constraints\"}");
+    sendJSONResponse(client, 400, "{\"success\":false,\"message\":\"Invalid size constraints\"}");
     return;
   }
 
@@ -338,7 +426,7 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
       if ((unsigned long)(millis() - otaTimeout) > OTA_TIMEOUT)
       {
         InternalStorage.close();
-        sendJSONResponse(client, 408, "{\"status\":\"error\",\"message\":\"OTA timeout\"}");
+        sendJSONResponse(client, 408, "{\"success\":false,\"message\":\"OTA timeout\"}");
         client.stop();
         return;
       }
@@ -355,7 +443,7 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
             if (totalReceived > expectedSize)
             {
               InternalStorage.close();
-              sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Size mismatch\"}");
+              sendJSONResponse(client, 400, "{\"success\":false,\"message\":\"Size mismatch\"}");
               client.stop();
               return;
             }
@@ -372,7 +460,7 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
 
     if (totalReceived == expectedSize)
     {
-      sendJSONResponse(client, 200, "{\"status\":\"success\",\"message\":\"Flashing complete. Rebooting.\"}");
+      sendJSONResponse(client, 200, "{\"success\":true,\"message\":\"Flashing complete. Rebooting.\"}");
       client.stop();
       delay(500);
       InternalStorage.apply();
@@ -381,12 +469,12 @@ void handleOtaRoute(EthernetClient &client, long expectedSize)
     }
     else
     {
-      sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Size mismatch\"}");
+      sendJSONResponse(client, 400, "{\"success\":false,\"message\":\"Size mismatch\"}");
     }
   }
   else
   {
-    sendJSONResponse(client, 500, "{\"status\":\"error\",\"message\":\"Storage init failed\"}");
+    sendJSONResponse(client, 500, "{\"success\":false,\"message\":\"Storage init failed\"}");
   }
 
   client.stop();
@@ -467,7 +555,7 @@ void handleHttpRequest()
         }
         else
         {
-          sendJSONResponse(client, 400, "{\"status\":\"error\",\"message\":\"Header too long\"}");
+          sendJSONResponse(client, 400, "{\"success\":false,\"message\":\"Header too long\"}");
           client.stop();
           return;
         }
@@ -515,6 +603,10 @@ void handleHttpRequest()
   {
     handlePostJammersRoute(client);
   }
+  else if (method == "POST" && route == "/deskcmd")
+  {
+    handlePostDeskCmdRoute(client);
+  }
   else if (method == "POST" && route == "/notifRGB")
   {
     handleNotifRGBControl(client);
@@ -530,9 +622,14 @@ void handleHttpRequest()
     updateJammerSensors();
     handleGetJammStateRoute(client);
   }
+  else if (method == "GET" && route == "/state")
+  {
+    // Respond using the actual jammer output pin states
+    handleGetStateRoute(client);
+  }
   else
   {
-    sendJSONResponse(client, 404, "{\"status\":\"error\",\"message\":\"Endpoint or Method unsupported\"}");
+    sendJSONResponse(client, 404, "{\"success\":false,\"message\":\"Endpoint or Method unsupported\"}");
   }
 
   client.stop();

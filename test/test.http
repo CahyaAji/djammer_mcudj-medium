@@ -89,3 +89,32 @@ GET {{Host}}/temp
 
 #### Get Jammer Status
 GET {{Host}}/jamm_state
+
+#### Desktop command: set jammers and desktop mode
+POST {{Host}}/deskcmd
+Content-Type: application/json
+
+{
+    "jamm_900": false,
+    "jamm_1500": false,
+    "jamm_2400": false,
+    "jamm_5200": false,
+    "jamm_5800": false,
+    "desktop_mode": 0
+}
+
+#### Desktop command: set jammers and desktop mode (repeat)
+POST {{Host}}/deskcmd
+Content-Type: application/json
+
+{
+    "jamm_900": true,
+    "jamm_1500": false,
+    "jamm_2400": true,
+    "jamm_5200": false,
+    "jamm_5800": false,
+    "desktop_mode": 1
+}
+
+#### Get State (actual jammer output pin states)
+GET {{Host}}/state
