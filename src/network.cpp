@@ -18,6 +18,7 @@ bool networkFault = false;
 static uint8_t noListenCount = 0;
 static unsigned long jammerLinkDownStartTime = 0;
 static bool jammerLinkDownTimerActive = false;
+static bool jammerLinkDownShutoffDone = false;
 
 // =====================================================
 // W5500 TIERED RECOVERY HELPERS
@@ -212,13 +213,23 @@ void enforceJammerLinkSafety()
       jammerLinkDownStartTime = millis();
       jammerLinkDownTimerActive = true;
     }
-    else if ((unsigned long)(millis() - jammerLinkDownStartTime) >= JAMMER_LINK_DOWN_SHUTOFF_DELAY)
+    else if (!jammerLinkDownShutoffDone &&
+             (unsigned long)(millis() - jammerLinkDownStartTime) >= JAMMER_LINK_DOWN_SHUTOFF_DELAY)
     {
-      turnOffAllJammers();
+      // Burst of 3 turn-off attempts with delays, in case RF interference
+      // glitches the first write. Then set the done flag so the user can
+      // re-enable jammers afterwards without them being killed every loop.
+      for (uint8_t i = 0; i < 3; i++)
+      {
+        turnOffAllJammers();
+        delay(50);
+      }
+      jammerLinkDownShutoffDone = true;
     }
   }
   else if (linkStatus == LinkON)
   {
     jammerLinkDownTimerActive = false;
+    jammerLinkDownShutoffDone = false;   // Reset for next link-down event
   }
 }
